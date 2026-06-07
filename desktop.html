@@ -796,6 +796,12 @@ input,textarea,select{font-family:'Inter',sans-serif}
             <div class="state-title">검색 결과 없음</div>
             <div class="state-sub" id="empty-msg">다른 검색어를 시도해 보세요.</div>
           </div>
+          <!-- 범위 축소 요구 (§13.4 동명이인 11건 이상) -->
+          <div class="state-view" id="state-refine" style="display:none">
+            <svg viewBox="0 0 24 24" style="width:32px;height:32px;stroke:#d97706;fill:none;stroke-width:2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <div class="state-title" style="color:#d97706">검색 범위를 좁혀주세요</div>
+            <div class="state-sub" id="refine-msg"></div>
+          </div>
           <!-- 결과 -->
           <div id="results-container" style="display:none">
             <div class="results-meta">
@@ -1021,18 +1027,51 @@ function setHint(text) {
   doSearch();
 }
 
+/* ── 검색 입력 파서 (§17.4, §13.3) ──
+   @닉네임#태그  → handle 직접 검색 (~2ms)
+   @닉네임       → nickname 캐시 검색
+   일반 키워드   → keyword ILIKE 검색
+   "지역 닉네임" → address + keyword 분리
+── */
+function parseSearchInput(raw) {
+  const q = raw.trim();
+  // handle 직접 입력: @xxx#yyyy
+  if (/^@.+#[0-9a-fA-Z]{2,8}$/.test(q)) {
+    return { mode: 'handle', p_handle: q };
+  }
+  // 닉네임 입력: @xxx
+  if (q.startsWith('@')) {
+    return { mode: 'nickname', p_nickname: q.slice(1) };
+  }
+  // 지역+닉네임 분리: "제주시 홍길동" 등 (2어절 이상)
+  const tokens = q.split(/\s+/);
+  if (tokens.length >= 2) {
+    // 앞 토큰이 지역 키워드인지 확인
+    const regionTokens = ['읍','동','구','시','도','군','면','리'];
+    const firstToken   = tokens[0];
+    const isRegion     = regionTokens.some(s => firstToken.endsWith(s)) || firstToken.length <= 4;
+    if (isRegion) {
+      return { mode: 'region_name', p_address: firstToken, p_keyword: tokens.slice(1).join(' ') };
+    }
+  }
+  return { mode: 'keyword', p_keyword: q };
+}
+
 /* ── 엔티티 검색 (Supabase search_entities RPC 직접 호출) ── */
 async function doSearch() {
-  const q = document.getElementById('search-input').value.trim();
-  if (!q && !currentFilter) return;
+  const raw = document.getElementById('search-input').value.trim();
+  if (!raw && !currentFilter) return;
   showState('loading');
 
-  // callerCtx(SUBSYSTEM 전달)와 currentFilter 병합
+  const parsed     = parseSearchInput(raw);
   const entityType = callerCtx?.filter?.entity_type || currentFilter || null;
   const occupation = callerCtx?.filter?.occupation  || null;
   const loc        = callerCtx?.location || userLocation || null;
   const sort       = callerCtx?.sort     || 'rating';
   const excludeGuid= currentUser?.guid || currentUser?.ipv6 || null;
+
+  // 브라우저 UI 언어 → BCP 47 lang_code
+  const langCode = (navigator.language || 'ko').split('-')[0];
 
   try {
     const res = await fetch(`${SB_URL}/rest/v1/rpc/search_entities`, {
@@ -1040,24 +1079,35 @@ async function doSearch() {
       headers: SB_HEADERS,
       body: JSON.stringify({
         p_entity_type:  entityType,
-        p_keyword:      q || null,
+        p_keyword:      parsed.p_keyword   || null,
+        p_handle:       parsed.p_handle    || null,
+        p_nickname:     parsed.p_nickname  || null,
+        p_lang_code:    langCode,
         p_occupation:   occupation,
-        p_address:      callerCtx?.filter?.address || null,
-        p_gdc_only:     callerCtx?.filter?.gdc_only || false,
+        p_address:      parsed.p_address   || callerCtx?.filter?.address || null,
+        p_gdc_only:     callerCtx?.filter?.gdc_only  || false,
         p_trust_min:    callerCtx?.filter?.trust_min || null,
         p_lat:          loc?.lat  || null,
         p_lng:          loc?.lng  || null,
         p_sort:         sort,
-        p_limit:        10,
+        p_limit:        20,   // 동명이인 11건 이상 감지를 위해 여유 있게
         p_offset:       0,
         p_exclude_guid: excludeGuid,
       }),
     });
     if (!res.ok) throw new Error(`Supabase ${res.status}`);
     const rows = await res.json();
-    renderResults(Array.isArray(rows) ? rows : [], q);
+    const results = Array.isArray(rows) ? rows : [];
+    // §13.4 동명이인 처리: 11건 이상이면 범위 축소 요구
+    if (results.length >= 11 && parsed.mode !== 'handle') {
+      showState('refine');
+      document.getElementById('refine-msg').textContent =
+        `"${raw}" 검색 결과가 ${results.length}건 이상입니다. 지역·업종 등 조건을 추가해 범위를 좁혀주세요.`;
+      return;
+    }
+    renderResults(results, raw);
   } catch {
-    renderResults(getDummy(q, currentFilter), q);
+    renderResults(getDummy(raw, currentFilter), raw);
   }
 }
 
@@ -1102,8 +1152,8 @@ function renderTable(results) {
         <div class="cell-entity">
           <div class="cell-av">${typeIcon[r.entity_type]||typeIcon.org}</div>
           <div>
-            <div class="cell-name">${r.name||'–'}</div>
-            ${r.nickname ? `<div class="cell-nick">@${r.nickname}</div>` : ''}
+            <div class="cell-name">${r.name||'–'}${r.verified ? ' <span title="검증됨" style="color:#059669;font-size:11px">✓</span>' : ''}</div>
+            ${r.handle ? `<div class="cell-nick">${r.handle}</div>` : (r.nickname ? `<div class="cell-nick">@${r.nickname}</div>` : '')}
           </div>
         </div>
       </td>
@@ -1159,6 +1209,7 @@ function showState(state, msg) {
   document.getElementById('state-initial').style.display  = state === 'initial'  ? 'flex' : 'none';
   document.getElementById('state-loading').style.display  = state === 'loading'  ? 'flex' : 'none';
   document.getElementById('state-empty').style.display    = state === 'empty'    ? 'flex' : 'none';
+  document.getElementById('state-refine').style.display   = state === 'refine'   ? 'flex' : 'none';
   document.getElementById('results-container').style.display = state === 'results' ? 'block' : 'none';
   if (msg) document.getElementById('empty-msg').textContent = msg;
 }

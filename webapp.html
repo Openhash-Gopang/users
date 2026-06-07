@@ -699,18 +699,35 @@ function renderMultiBub(candidates) {
   body.appendChild(card); scrollChat();
 }
 
+/* ── 검색 입력 파서 (§17.4, §13.3) ── */
+function parseSearchInput(raw) {
+  const q = raw.trim();
+  if (/^@.+#[0-9a-fA-Z]{2,8}$/.test(q)) return { mode:'handle',   p_handle:   q };
+  if (q.startsWith('@'))                  return { mode:'nickname', p_nickname: q.slice(1) };
+  const tokens = q.split(/\s+/);
+  if (tokens.length >= 2) {
+    const regionSuffixes = ['읍','동','구','시','도','군','면','리'];
+    if (regionSuffixes.some(s => tokens[0].endsWith(s))) {
+      return { mode:'region_name', p_address: tokens[0], p_keyword: tokens.slice(1).join(' ') };
+    }
+  }
+  return { mode:'keyword', p_keyword: q };
+}
+
 /* ── 직접 검색 (Supabase search_entities RPC 직접 호출) ── */
 async function doSearch() {
-  const q = document.getElementById('search-input').value.trim();
-  if (!q) return;
+  const raw = document.getElementById('search-input').value.trim();
+  if (!raw) return;
   document.getElementById('search-results').innerHTML =
     `<div class="sr-loading"><div class="spinner"></div>검색 중…</div>`;
 
+  const parsed      = parseSearchInput(raw);
   const entityType  = callerCtx?.filter?.entity_type || currentFilter || null;
   const occupation  = callerCtx?.filter?.occupation  || null;
   const loc         = callerCtx?.location || userLocation || null;
   const sort        = callerCtx?.sort     || 'rating';
   const excludeGuid = currentUser?.guid   || currentUser?.ipv6 || null;
+  const langCode    = (navigator.language || 'ko').split('-')[0];
 
   try {
     const res = await fetch(`${SB_URL}/rest/v1/rpc/search_entities`, {
@@ -718,23 +735,39 @@ async function doSearch() {
       headers: SB_HEADERS,
       body: JSON.stringify({
         p_entity_type:  entityType,
-        p_keyword:      q || null,
+        p_keyword:      parsed.p_keyword  || null,
+        p_handle:       parsed.p_handle   || null,
+        p_nickname:     parsed.p_nickname || null,
+        p_lang_code:    langCode,
         p_occupation:   occupation,
-        p_address:      callerCtx?.filter?.address  || null,
-        p_gdc_only:     callerCtx?.filter?.gdc_only || false,
-        p_trust_min:    callerCtx?.filter?.trust_min|| null,
+        p_address:      parsed.p_address  || callerCtx?.filter?.address || null,
+        p_gdc_only:     callerCtx?.filter?.gdc_only  || false,
+        p_trust_min:    callerCtx?.filter?.trust_min || null,
         p_lat:          loc?.lat  || null,
         p_lng:          loc?.lng  || null,
         p_sort:         sort,
-        p_limit:        10,
+        p_limit:        20,
         p_offset:       0,
         p_exclude_guid: excludeGuid,
       }),
     });
     if (!res.ok) throw new Error(`Supabase ${res.status}`);
-    const rows = await res.json();
-    renderSearchList(Array.isArray(rows) ? rows : [], q);
-  } catch { renderSearchList(getDummy(q), q); }
+    const rows    = await res.json();
+    const results = Array.isArray(rows) ? rows : [];
+    // §13.4 동명이인 11건 이상 — 범위 축소 요구
+    if (results.length >= 11 && parsed.mode !== 'handle') {
+      document.getElementById('search-results').innerHTML =
+        `<div class="sr-empty">
+          <svg viewBox="0 0 24 24" style="stroke:#d97706"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <div class="sr-empty-title" style="color:#d97706">검색 범위를 좁혀주세요</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px">
+            "${raw}" 결과가 ${results.length}건 이상입니다.<br>지역·업종 등 조건을 추가해 주세요.
+          </div>
+        </div>`;
+      return;
+    }
+    renderSearchList(results, raw);
+  } catch { renderSearchList(getDummy(raw), raw); }
 }
 
 function renderSearchList(results, q) {
@@ -751,8 +784,8 @@ function renderSearchList(results, q) {
       <div class="sr-top">
         <div class="sr-av">${typeIcon[r.entity_type]||typeIcon.org}</div>
         <div style="flex:1;min-width:0">
-          <div class="sr-name">${r.name||'–'}</div>
-          ${r.nickname ? `<div class="sr-nick">@${r.nickname}</div>` : ''}
+          <div class="sr-name">${r.name||'–'}${r.verified ? ' <span style="color:#059669;font-size:11px">✓</span>' : ''}</div>
+          ${r.handle ? `<div class="sr-nick">${r.handle}</div>` : (r.nickname ? `<div class="sr-nick">@${r.nickname}</div>` : '')}
           <div class="sr-badges">
             <span class="badge b-${r.trust_level||'L0'}">${r.trust_level||'L0'}</span>
             ${r.gdc_accepted ? '<span class="badge b-gdc">₮ GDC</span>' : ''}
