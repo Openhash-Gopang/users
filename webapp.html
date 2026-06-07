@@ -1,334 +1,563 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Gopang Users</title>
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0ea5e9">
-<link rel="icon" href="data:,">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700;800&display=swap">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;font-family:'IBM Plex Sans KR',-apple-system,sans-serif;font-size:15px;color:#0f172a;background:#f8fafc;-webkit-font-smoothing:antialiased;overflow:hidden}
-button{font-family:'IBM Plex Sans KR',sans-serif;cursor:pointer;border:none}
-:root{
-  --sky:#0ea5e9;--sky-dk:#0284c7;--sky-bg:#f0f9ff;--sky-bd:#bae6fd;
-  --teal:#0d9488;--teal-bg:#f0fdfa;
-  --border:#e2e8f0;--txt2:#475569;--txt3:#94a3b8;
-  --safe-b:env(safe-area-inset-bottom,0px);
-}
-.app{display:flex;flex-direction:column;height:100%;max-width:480px;margin:0 auto;background:#f8fafc}
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>K-Market</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%231A1F29'/%3E%3Ctext x='96' y='130' font-size='110' text-anchor='middle' fill='%233ECF8E' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E"/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="K-Market"/>
+  <meta name="theme-color" content="#1A1F29"/>
+  <meta name="description" content="K-Market AI 쇼핑 비서"/>
+  <style>
+    :root {
+      --safe-top:    env(safe-area-inset-top,    0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left:   env(safe-area-inset-left,   0px);
+      --safe-right:  env(safe-area-inset-right,  0px);
+    }
+  </style>
+  <style>
+    :root {
+      /* ══════════════════════════════════════════════════
+         고팡 색상 시스템 v5.0
+         Supabase 대시보드 스타일 기반
+         간결·전문·사무적 / WCAG 2.1 AA 전항목 통과
+         ══════════════════════════════════════════════════ */
 
-/* ── 탑바 ── */
-.topbar{background:#0f172a;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.tb-mark{width:30px;height:30px;background:var(--sky);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;font-family:monospace}
-.tb-info{flex:1}
-.tb-name{font-size:15px;font-weight:800;color:#f1f5f9}
-.tb-status{font-size:10px;color:#64748b;margin-top:1px}
-.tb-close{padding:6px 11px;border-radius:7px;font-size:12px;font-weight:700;background:rgba(255,255,255,.1);color:#94a3b8;border:1px solid rgba(255,255,255,.1);transition:background .13s}
-.tb-close:hover{background:rgba(255,255,255,.18);color:#f1f5f9}
+      /* 기본 배경 */
+      --bg:           #F8F9FA;   /* 아주 연한 회색 — Supabase 메인 bg */
+      --bg-elevated:  #FFFFFF;   /* 카드·패널 */
+      --bg-glass:     rgba(255,255,255,0.96);
+      --bg-input:     #FFFFFF;
+      --bg-subtle:    #F1F3F5;   /* 호버, 구분 */
+      --bg-code:      #F4F4F5;
 
-/* ── 콘텐츠/스크린 ── */
-.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column}
-.screen{display:none;flex-direction:column;flex:1;animation:fadeIn .18s ease}
-.screen.active{display:flex}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+      /* 구분선 */
+      --sep:          #E4E4E7;   /* 얇고 선명한 보더 */
+      --sep-strong:   #D1D5DB;
 
-/* ── 채팅 화면 (메인) ── */
-.chat-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
-.b-ai{max-width:88%;align-self:flex-start;background:#fff;border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:11px 13px;font-size:14px;line-height:1.75;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-.b-user{max-width:88%;align-self:flex-end;background:var(--sky);color:#fff;border-radius:14px 14px 4px 14px;padding:11px 13px;font-size:14px;line-height:1.75}
-.typing{display:flex;gap:4px;align-items:center;padding:11px 14px;background:#fff;border:1px solid var(--border);border-radius:4px 14px 14px 14px;align-self:flex-start;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-.typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;animation:t .9s infinite}
-.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
-@keyframes t{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
-.quick-row{display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start;padding:0 0 2px}
-.qb{background:#fff;border:1.5px solid var(--border);border-radius:18px;padding:6px 12px;font-size:12px;font-weight:600;color:#334155;transition:all .13s}
-.qb:active{background:var(--sky-bg);border-color:var(--sky);color:var(--sky-dk)}
+      /* 텍스트 */
+      --label:        #111827;   /* 거의 검정 */
+      --label-2:      #374151;
+      --label-3:      #6B7280;
+      --label-4:      #9CA3AF;
 
-/* ── 결과 카드 (인라인) ── */
-.r-card{max-width:92%;align-self:flex-start;background:#fff;border:1px solid var(--border);border-radius:4px 14px 14px 14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.r-card-header{padding:9px 13px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--txt2)}
-.r-item{padding:11px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .12s}
-.r-item:last-child{border-bottom:none}
-.r-item:active{background:#f0f9ff}
-.r-av{width:34px;height:34px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--sky-bg)}
-.r-av.person{background:#fef3c7}.r-av.concept{background:#faf5ff}
-.r-info{flex:1;min-width:0}
-.r-name{font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r-sub{font-size:10px;color:var(--txt3);margin-top:1px}
-.r-action{padding:6px 12px;border-radius:7px;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
-.r-action.connect{background:var(--sky)}
-.r-action.transact{background:var(--teal)}
-.r-badges{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap}
-.badge{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px}
-.b-L3{background:#dcfce7;color:#166534}.b-L2{background:#dbeafe;color:#1e40af}
-.b-L1{background:#fef9c3;color:#854d0e}.b-L0{background:#f1f5f9;color:#64748b}
-.b-gdc{background:#fffbeb;color:#b45309}
+      /* 헤더/사이드바 전용 텍스트 */
+      --label-on-dark:   rgba(255,255,255,0.92);
+      --label-2-on-dark: rgba(255,255,255,0.55);
 
-/* ── 복수 후보 ── */
-.multi-card{max-width:92%;align-self:flex-start;background:#fff;border:1.5px solid var(--sky-bd);border-radius:4px 14px 14px 14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.multi-header{padding:9px 13px;background:var(--sky-bg);font-size:11px;font-weight:700;color:var(--sky-dk)}
-.multi-item{padding:10px 13px;border-top:1px solid var(--sky-bd);display:flex;align-items:center;gap:9px;cursor:pointer;transition:background .12s}
-.multi-item:active{background:#f0f9ff}
-.multi-num{width:22px;height:22px;border-radius:50%;background:var(--sky);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.multi-name{font-size:13px;font-weight:600;color:#0f172a}
-.multi-hint{font-size:10px;color:var(--txt3)}
-.multi-act{padding:4px 9px;border-radius:5px;font-size:10px;font-weight:700;background:var(--sky);color:#fff;flex-shrink:0;margin-left:auto}
+      /* 브랜드 — Supabase 초록 계열 */
+      --tint:         #3ECF8E;   /* Supabase 시그니처 그린 */
+      --tint-dark:    #29A374;   /* 호버 */
+      --tint-dim:     #ECFDF5;   /* 연초록 배경 */
+      --tint-dim-bd:  #A7F3D0;
 
-/* ── 검색 화면 ── */
-.search-screen{flex:1;display:flex;flex-direction:column}
-.search-header{background:#fff;border-bottom:1px solid var(--border);padding:14px 16px}
-.search-box{display:flex;align-items:center;background:#f1f5f9;border:1.5px solid var(--border);border-radius:10px;padding:0 12px;gap:8px;transition:border-color .15s}
-.search-box:focus-within{border-color:var(--sky);background:#fff}
-.si{flex:1;border:none;background:none;font-family:'IBM Plex Sans KR',sans-serif;font-size:14px;color:#0f172a;padding:11px 0;outline:none}
-.si::placeholder{color:var(--txt3)}
-.s-btn{padding:7px 13px;border-radius:7px;font-size:12px;font-weight:700;background:var(--sky);color:#fff;flex-shrink:0}
-.filter-strip{display:flex;gap:6px;margin-top:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
-.filter-strip::-webkit-scrollbar{display:none}
-.fc{padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;border:1.5px solid var(--border);color:#475569;background:#fff;white-space:nowrap;flex-shrink:0}
-.fc.active{border-color:var(--sky);background:var(--sky-bg);color:var(--sky-dk)}
-.search-results{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px}
-.sr-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer;transition:all .13s}
-.sr-item:active{border-color:var(--sky)}
-.sr-top{display:flex;align-items:center;gap:10px;margin-bottom:7px}
-.sr-av{width:36px;height:36px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--sky-bg)}
-.sr-name{font-size:14px;font-weight:700;color:#0f172a}
-.sr-nick{font-size:10px;color:var(--sky-dk)}
-.sr-desc{font-size:12px;color:var(--txt2);line-height:1.6;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.sr-loc{font-size:11px;color:var(--txt3);margin-bottom:8px}
-.sr-rating{font-size:11px;color:var(--txt2);margin-bottom:10px}
-.sr-acts{display:flex;gap:6px}
-.sr-act{flex:1;padding:8px;border-radius:7px;font-size:12px;font-weight:700;text-align:center}
-.sr-act.connect{background:var(--sky);color:#fff}
-.sr-act.transact{background:#fff;color:#0f172a;border:1.5px solid var(--border)}
-.sr-empty{text-align:center;padding:48px 20px;color:var(--txt3)}
-.sr-empty-icon{font-size:40px;margin-bottom:12px;opacity:.5}
+      /* 사이드바/헤더 — Supabase 짙은 네이비 */
+      --header-bg:    #1A1F29;   /* Supabase 사이드바 */
+      --header-mid:   #1A1F29;   /* 탑바 동일 */
+      --header-top:   #FFFFFF;   /* 탑바를 흰색으로 — Supabase 스타일 */
+      --header-hover: rgba(255,255,255,0.07);
 
-/* ── 인풋 바 ── */
-.input-bar{background:#fff;border-top:1px solid var(--border);padding:10px 12px;padding-bottom:calc(10px + var(--safe-b));display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
-.chat-ta{flex:1;background:#f1f5f9;border:1.5px solid var(--border);border-radius:20px;padding:9px 14px;font-family:'IBM Plex Sans KR',sans-serif;font-size:14px;resize:none;outline:none;max-height:100px;line-height:1.5;transition:border-color .15s,background .15s}
-.chat-ta:focus{border-color:var(--sky);background:#fff}
-.snd-btn{width:38px;height:38px;border-radius:50%;background:var(--sky);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .14s}
-.snd-btn:active{background:var(--sky-dk)}
-.snd-btn:disabled{background:var(--sky-bd)}
-.snd-btn svg{width:15px;height:15px;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+      /* 내 메시지 버블 — 연한 초록 tint */
+      --bubble-out-bg:   #ECFDF5;
+      --bubble-out-text: #065F46;
 
-/* ── 탭바 ── */
-.tab-bar{background:#fff;border-top:1px solid var(--border);display:flex;padding-bottom:var(--safe-b);flex-shrink:0}
-.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 4px;font-size:9px;font-weight:700;color:var(--txt3);background:none;border:none;transition:color .13s}
-.tab-item.active{color:var(--sky-dk)}
-.tab-icon{font-size:20px;line-height:1}
+      /* AI 메시지 버블 — 순백 카드 */
+      --bubble-in-bg:    #FFFFFF;
+      --bubble-in-text:  #111827;
 
-/* ── 설정 바텀시트 ── */
-.sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:none}
-.sheet-backdrop.show{display:block}
-.bottom-sheet{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#fff;border-radius:20px 20px 0 0;padding:0 0 calc(16px + var(--safe-b));z-index:201;transform:translateY(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
-.bottom-sheet.show{transform:translateY(0)}
-.sheet-handle{width:36px;height:4px;background:#e2e8f0;border-radius:2px;margin:12px auto 16px}
-.sheet-title{font-size:16px;font-weight:800;color:#0f172a;padding:0 20px 12px;border-bottom:1px solid var(--border)}
-.sheet-item{display:flex;align-items:center;padding:14px 20px;gap:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
-.sheet-item:last-child{border-bottom:none}
-.sheet-item:active{background:#f8fafc}
-.sheet-item-icon{font-size:20px;flex-shrink:0}
-.sheet-item-label{font-size:14px;font-weight:600;color:#0f172a;flex:1}
-.sheet-item-sub{font-size:11px;color:var(--txt3)}
-.sheet-item-val{font-size:12px;color:var(--sky-dk);font-weight:600}
+      /* 시맨틱 */
+      --green:        #059669;
+      --red:          #DC2626;
+      --yellow:       #D97706;
+      --orange:       #EA580C;
+      --blue:         #2563EB;
 
-/* ── 토스트 ── */
-.toast{position:fixed;top:70px;left:16px;right:16px;max-width:448px;margin:0 auto;background:#0f172a;color:#f1f5f9;border-radius:10px;padding:11px 16px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transform:translateY(-8px);transition:all .22s}
-.toast.show{opacity:1;transform:translateY(0)}
-</style>
-</head>
-<body>
-<div class="app">
+      /* 반경 — Supabase는 작은 반경 선호 */
+      --r-sm:         4px;
+      --r-md:         6px;
+      --r-lg:         8px;
+      --r-xl:         12px;
 
-  <!-- 탑바 -->
-  <div class="topbar">
-    <div class="tb-mark">U</div>
-    <div class="tb-info">
-      <div class="tb-name">Gopang Users</div>
-      <div class="tb-status" id="tb-status">연결 중…</div>
-    </div>
-    <button class="tb-close" onclick="tryClose()">✕ 닫기</button>
-  </div>
+      --blur:         saturate(180%) blur(20px);
+      --blur-sm:      saturate(160%) blur(10px);
+      --font:         'Noto Sans KR', -apple-system, 'Helvetica Neue', sans-serif;
+      --font-mono:    'IBM Plex Mono', 'SF Mono', monospace;
+      --font-display: 'Noto Sans KR', -apple-system, sans-serif;
+      --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+      --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+    }
 
-  <!-- 콘텐츠 -->
-  <div class="content" id="content-area">
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <!-- ① AI 채팅 화면 -->
-    <div class="screen active" id="screen-chat">
-      <div class="chat-body" id="chat-body">
-        <div class="b-ai">안녕하세요! Gopang Users AI입니다. 🌐<br><br>
-          사람, 기관, AI, 사물 — 누구든 자연어로 찾아드립니다.<br>
-          거래할 업체나 연결할 인물을 말씀해 주세요.</div>
-        <div class="quick-row">
-          <button class="qb" onclick="qs('짜장면 주문해 줘')">🍜 짜장면 주문</button>
-          <button class="qb" onclick="qs('제주도 홍길동 연결해 줘')">🧑 인물 연결</button>
-          <button class="qb" onclick="qs('@해녀카페 연결')">@ 닉네임</button>
-          <button class="qb" onclick="qs('우도 다이빙')">🤿 다이빙</button>
-        </div>
-      </div>
-      <div class="input-bar">
-        <textarea class="chat-ta" id="chat-input" rows="1"
-          placeholder="자연어로 요청하세요…"
-          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
-        <button class="snd-btn" id="snd-btn" onclick="sendMsg()">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
-        </button>
-      </div>
-    </div>
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--label);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
 
-    <!-- ② 검색 화면 -->
-    <div class="screen" id="screen-search">
-      <div class="search-header">
-        <div class="search-box">
-          <input class="si" id="search-input" placeholder="이름, @닉네임, IPv6, 업종…"
-            onkeydown="if(event.key==='Enter') doSearch()">
-          <button class="s-btn" onclick="doSearch()">검색</button>
-        </div>
-        <div class="filter-strip" id="filter-strip">
-          <button class="fc active" data-t="" onclick="setFilter(this,'')">전체</button>
-          <button class="fc" data-t="person" onclick="setFilter(this,'person')">🧑 자연인</button>
-          <button class="fc" data-t="org" onclick="setFilter(this,'org')">🏢 기관</button>
-          <button class="fc" data-t="concept" onclick="setFilter(this,'concept')">🤖 AI</button>
-          <button class="fc" data-t="thing" onclick="setFilter(this,'thing')">📡 사물</button>
-        </div>
-      </div>
-      <div class="search-results" id="search-results">
-        <div class="sr-empty">
-          <div class="sr-empty-icon">🔍</div>
-          <div style="font-size:14px;font-weight:600;color:#475569;margin-bottom:4px">검색어를 입력하세요</div>
-          <div style="font-size:12px">자연인·기관·AI·사물 모두 검색할 수 있습니다</div>
-        </div>
-      </div>
-    </div>
+    /* Apple HIG macOS 다크 — 미세 방사형 하이라이트 */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #29A374, #3ECF8E, #29A374);
+      z-index: 999;
+      pointer-events: none;
+    }
+    #app { position: relative; z-index: 1; }
 
-    <!-- ③ 내 프로필 화면 -->
-    <div class="screen" id="screen-profile">
-      <div style="padding:20px 16px">
-        <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--sky),var(--teal));display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff" id="prof-av">?</div>
-            <div>
-              <div style="font-size:16px;font-weight:800;color:#0f172a" id="prof-name">로그인 필요</div>
-              <div style="font-size:11px;color:var(--txt3);margin-top:2px" id="prof-trust">–</div>
-            </div>
-          </div>
-          <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;font-size:11px;font-family:monospace;color:var(--txt3);word-break:break-all;line-height:1.5" id="prof-ipv6">–</div>
-        </div>
-        <button style="width:100%;padding:12px;border-radius:9px;background:var(--sky);color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-bottom:10px"
-          onclick="showSettings()">⚙️ 설정</button>
-        <button style="width:100%;padding:12px;border-radius:9px;background:#fff;color:#0f172a;font-size:14px;font-weight:600;border:1.5px solid var(--border);cursor:pointer"
-          onclick="copyIPv6()">📋 IPv6 주소 복사</button>
-      </div>
-    </div>
+    /* ── 앱 레이아웃 ────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      position: relative;
+    }
 
-  </div>
+    /* ── 상단 여백 (헤더 없음 — 요구사항) ─────────────── */
+    .top-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: calc(48px + var(--safe-top));
+      padding-top: var(--safe-top);
+      z-index: 100;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding-right: 14px;
+      padding-left: 14px;
+      gap: 8px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--sep);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    #top-logo { justify-self: start; }
+    #top-bar-title { justify-self: center; }
+    #top-bar-right { justify-self: end; display:flex; align-items:center; gap:4px; }
 
-  <!-- 탭바 -->
-  <div class="tab-bar" id="tab-bar">
-    <button class="tab-item active" onclick="showScreen('chat',this)">
-      <div class="tab-icon">💬</div>AI 검색
-    </button>
-    <button class="tab-item" onclick="showScreen('search',this)">
-      <div class="tab-icon">🔍</div>직접 검색
-    </button>
-    <button class="tab-item" onclick="showScreen('profile',this)">
-      <div class="tab-icon">👤</div>내 정보
-    </button>
-    <button class="tab-item" onclick="showSettings()">
-      <div class="tab-icon">⚙️</div>설정
-    </button>
-  </div>
-</div>
+    /* ── PWA 설치 배너 ─────────────────────────────────── */
+    .install-banner {
+      position: fixed;
+      bottom: calc(90px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      width: calc(100% - 32px);
+      max-width: 420px;
+      background: #FFFFFF;
+      border: 1px solid #D1D9E6;
+      border-radius: var(--r-xl);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+      padding: 16px 18px;
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-spring);
+    }
+    .install-banner.show {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateX(-50%) translateY(0);
+    }
+    .install-banner-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      flex-shrink: 0;
+      overflow: hidden;
+      background: #F0F4F8;
+    }
+    .install-banner-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .install-banner-text { flex: 1; }
+    .install-banner-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--label);
+      margin-bottom: 2px;
+    }
+    .install-banner-sub {
+      font-size: 12px;
+      color: var(--label-2);
+      line-height: 1.4;
+    }
+    .install-banner-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .install-btn {
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: none;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .install-btn:active { opacity: 0.7; }
+    .install-btn-primary { background: var(--tint); color: #fff; }
+    .install-btn-dismiss {
+      background: transparent;
+      color: var(--label-3);
+      font-weight: 400;
+      font-size: 12px;
+      text-align: center;
+    }
 
-<!-- 설정 바텀시트 -->
-<div class="sheet-backdrop" id="sheet-backdrop" onclick="hideSettings()"></div>
-<div class="bottom-sheet" id="bottom-sheet">
-  <div class="sheet-handle"></div>
-  <div class="sheet-title">설정</div>
-  <div class="sheet-item" onclick="toast('공개 프로필 편집은 gopang.net에서 가능합니다.')">
-    <div class="sheet-item-icon">👤</div>
-    <div>
-      <div class="sheet-item-label">공개 프로필 편집</div>
-      <div class="sheet-item-sub">이름, 소개, 서비스 태그</div>
-    </div>
-  </div>
-  <div class="sheet-item" id="setting-public" onclick="togglePublic()">
-    <div class="sheet-item-icon">🌐</div>
-    <div>
-      <div class="sheet-item-label">검색 공개 설정</div>
-      <div class="sheet-item-sub">다른 사용자에게 검색 노출 허용</div>
-    </div>
-    <div class="sheet-item-val" id="setting-public-val">공개</div>
-  </div>
-  <div class="sheet-item" onclick="toast('GDC 결제 설정은 gdc.gopang.net에서 가능합니다.')">
-    <div class="sheet-item-icon">₮</div>
-    <div>
-      <div class="sheet-item-label">GDC 결제 수락</div>
-      <div class="sheet-item-sub">K-Market 거래 채널 활성화</div>
-    </div>
-    <div class="sheet-item-val" id="setting-gdc-val">사용</div>
-  </div>
-  <div class="sheet-item" onclick="hideSettings()">
-    <div class="sheet-item-icon">✕</div>
-    <div class="sheet-item-label">닫기</div>
-  </div>
-</div>
+    /* ── 우상단 버튼 그룹 ──────────────────────────────── */
+    .top-btn {
+      width: 34px; height: 34px;
+      border-radius: var(--r-md);
+      border: none;
+      background: transparent;
+      color: var(--label-3);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      transition: background 0.15s, color 0.15s, transform 0.12s var(--ease-spring);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .top-btn:hover  { background: var(--bg-subtle); color: var(--label); }
+    .top-btn:active { transform: scale(0.93); }
 
-<div class="toast" id="toast"></div>
+    .btn-ai {
+      width: auto;
+      padding: 0 12px;
+      border-radius: var(--r-md);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--label-3);
+      gap: 5px;
+      border: 1px solid var(--sep);
+      transition: color 0.2s, background 0.2s, border-color 0.2s;
+    }
+    .btn-ai .ai-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--label-4);
+      transition: background 0.3s, transform 0.3s;
+    }
+    .btn-ai.active .ai-dot {
+      background: var(--tint);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    .btn-ai.active {
+      background: var(--tint-dim);
+      border-color: var(--tint-dim-bd);
+      color: var(--green);
+    }
+    @keyframes pulse-dot {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.5; transform: scale(0.7); }
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.4; }
+    }
 
+    /* ── 메시지 영역 ────────────────────────────────────── */
+    #message-list {
+      background: var(--bg);
+      flex: 1;
+      overflow-y: auto;
+      padding: 64px 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      scroll-behavior: smooth;
+    }
+    #message-list::-webkit-scrollbar { width: 0; }
+
+    .msg-row {
+      display: flex;
+      padding: 3px 16px;
+      animation: msg-in 0.28s var(--ease-out) both;
+    }
+    @keyframes msg-in {
+      from { opacity:0; transform: translateY(10px) scale(0.97); }
+      to   { opacity:1; transform: translateY(0) scale(1); }
+    }
+
+    .msg-row.user  { justify-content: flex-end; }
+    .msg-row.ai    { justify-content: flex-start; }
+
+    .bubble {
+      max-width: 72%;
+      padding: 10px 14px;
+      border-radius: var(--r-lg);
+      font-size: 15px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bubble-user {
+      background: var(--bubble-out-bg);
+      color: var(--bubble-out-text);
+      border-bottom-right-radius: 4px;
+    }
+    .bubble-ai {
+      background: var(--bubble-in-bg);
+      color: var(--bubble-in-text);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--sep);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* 스트리밍 중 커서 깜빡임 */
+    .bubble-ai.streaming::after {
+      content: '▋';
+      display: inline-block;
+      animation: blink .7s step-end infinite;
+      color: var(--tint);
+      margin-left: 2px;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* 위험 배지 (버블 아래 inline) */
+    .risk-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .risk-chip.s0 { background: #D1FAE5; color: #065F46; border:1px solid #6EE7B7; }
+    .risk-chip.s1 { background: #FEF3C7; color: #92400E; border:1px solid #FCD34D; }
+    .risk-chip.s2 { background: #FFEDD5; color: #9A3412; border:1px solid #FDBA74; }
+    .risk-chip.s3 { background: #FEE2E2; color: #991B1B; border:1px solid #FCA5A5; }
+
+    /* AI 타이핑 인디케이터 */
+    .typing-indicator {
+      display: flex; align-items: center; gap: 4px;
+      padding: 12px 16px;
+    }
+    .typing-indicator span {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #9AA5B4;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: translateY(0); }
+      40%          { transform: translateY(-5px); }
+    }
+
+    /* ── 하단 입력 영역 (Apple Messages / Claude.ai 스타일) */
+    .input-dock {
+      flex-shrink: 0;
+      padding: 8px 12px calc(12px + var(--safe-bottom));
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--sep);
+    }
+
+    /* 상태 바 — 숨김 처리 */
+    .status-strip { display: none; }
+    .status-dot   { display: none; }
+
+    /* 입력 컨테이너 */
+    .input-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--bg-elevated);
+      border-radius: var(--r-lg);
+      padding: 6px 6px 6px 10px;
+      border: 1px solid var(--sep);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .input-wrap:focus-within {
+      border-color: var(--tint);
+      box-shadow: 0 0 0 2px rgba(62,207,142,0.20);
+    }
+
+    /* 좌측 액션 버튼 */
+    .input-actions-left {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+      padding-bottom: 2px;
+    }
+    .ia-btn {
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: #718096;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      transition: color 0.12s, background 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ia-btn:hover  { color: var(--tint); background: var(--tint-dim); }
+    /* 흰 배경 입력창 안 아이콘 — 더 진하게 */
+    .input-wrap .ia-btn { color: #5A6778; }
+    .input-wrap .ia-btn:hover { color: var(--tint); background: var(--tint-dim); }
+    .ia-btn:active { transform: scale(0.9); }
+
+    /* 버전 선택 드롭다운 */
+    .version-select { display: none; }
+    ._version-select-orig {
+      background: transparent;
+      border: none;
+      color: var(--label-2);
+      font-size: 12px;
+      font-family: var(--font);
+      cursor: pointer;
+      padding: 4px 2px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .version-select:hover { color: var(--label); }
+    .version-select option { background: #17212B; color: #fff; }
+
+    /* textarea */
+    #msg-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--label);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.4;
+      resize: none;
+      max-height: 140px;
+      min-height: 22px;
+      overflow-y: auto;
+      padding: 4px 0;
+      align-self: flex-end;
+    }
+    #msg-input::placeholder { color: #9AA5B4; }
+    #msg-input::-webkit-scrollbar { width: 0; }
+
+    /* 전송 버튼 */
+    .send-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: var(--tint);
+      color: #fff;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 15px;
+      transition: background 0.15s, transform 0.1s var(--ease-spring), opacity 0.15s;
+      align-self: flex-end;
 <script>
-/* ── 설정 ── */
-const PROXY  = 'https://gopang-proxy.tensor-city.workers.dev';
-const SP_URL = 'https://raw.githubusercontent.com/Openhash-Gopang/gopang_v2/main/prompts/SP-USERS-v1_0.txt';
+// ════════════════════════════════════════════════════════════
+// users.gopang.net — webapp.html v2.1 (모바일)
+// 변경: 실제 DB(user_profiles 기반) + ctx 수신
+//       SP-USERS-v2_0 / AI 채팅은 Worker /ai/chat (기존)
+//       검색·is_public은 Supabase REST 직접 호출 (Worker 수정 없음)
+//       postMessage origin 고정 / 마이크 v3.6 패턴 준수
+// ════════════════════════════════════════════════════════════
 
-let currentUser = null;
-let systemPrompt = null;
-let chatHistory  = [];
+const PROXY      = 'https://gopang-proxy.tensor-city.workers.dev';
+const SP_URL     = 'https://raw.githubusercontent.com/Openhash-Gopang/users/main/SP-USERS-v2_0.txt';
+const SB_URL     = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
+const SB_KEY     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
+const SB_HEADERS = { 'Content-Type':'application/json', 'apikey':SB_KEY, 'Authorization':'Bearer '+SB_KEY };
+
+let currentUser   = null;
+let systemPrompt  = null;
+let chatHistory   = [];
 let currentFilter = '';
-let isPublic = true;
+let isPublic      = true;
+let userLocation  = null;
+let callerCtx     = null;
+let micActive     = false;
+let recognition   = null;
 
-/* ── 인증 ── */
+/* ── 인증 콜백 ── */
 window._onGopangAuth = function(user) {
   currentUser = user;
-  document.getElementById('tb-status').textContent = `${user.name||'사용자'} · ${user.trust_level||'L0'}`;
-  document.getElementById('prof-av').textContent = (user.name||'?').charAt(0).toUpperCase();
-  document.getElementById('prof-name').textContent = user.name || user.ipv6?.slice(0,20) || '–';
+  document.getElementById('tb-trust').textContent = `Trust ${user.trust_level||'L0'}`;
+  const init = (user.name||'?').charAt(0).toUpperCase();
+  document.getElementById('prof-av').textContent    = init;
+  document.getElementById('prof-name').textContent  = user.name || (user.ipv6||user.guid||'').slice(0,20) || '–';
   document.getElementById('prof-trust').textContent = `Trust ${user.trust_level||'L0'} · GAS v1.6`;
-  document.getElementById('prof-ipv6').textContent = user.ipv6 || '–';
+  document.getElementById('prof-ipv6').textContent  = user.ipv6 || user.guid || '–';
 };
 
-(function(){ const s=document.createElement('script');
-  s.src='https://gopang.net/subsystem-auth.js';
-  s.onerror=()=>{document.getElementById('tb-status').textContent='개발 모드';};
-  document.head.appendChild(s); })();
-
-/* ── GWP 부모 창 메시지 수신 ── */
+/* ── GWP 메시지 수신 (SUBSYSTEM이 postMessage로 쿼리 전달) ── */
 window.addEventListener('message', e => {
-  const d = e.data;
-  if (!d || !d.type) return;
-  if (d.type === 'GOPANG_SEARCH') {
-    const q = d.query || '';
-    document.getElementById('chat-input').value = q;
+  if (e.origin !== 'https://gopang.net') return;
+  if (e.data?.type === 'GOPANG_SEARCH') {
+    document.getElementById('chat-input').value = e.data.query || '';
+    showScreen('chat');
     sendMsg();
   }
 });
+
+/* ── GWP ctx URL 파라미터 처리 ── */
+(function initCtx() {
+  const params = new URLSearchParams(location.search);
+  const ctxRaw = params.get('ctx');
+  const ctxEnc = params.get('ctx_enc');
+  if (!ctxRaw) return;
+  try {
+    const decoded = ctxEnc === 'b64'
+      ? decodeURIComponent(escape(atob(ctxRaw)))
+      : decodeURIComponent(ctxRaw);
+    callerCtx = JSON.parse(decoded);
+    if (callerCtx.query) {
+      setTimeout(() => {
+        document.getElementById('chat-input').value = callerCtx.query;
+        showScreen('chat');
+        document.querySelectorAll('.tab-item')[0]?.classList.add('active');
+        sendMsg();
+      }, 300);
+    }
+  } catch(e) { console.warn('[ctx] 파싱 실패:', e); }
+})();
+
+/* ── GPS ── */
+(function initLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+    () => {}
+  );
+})();
 
 /* ── SP 로드 ── */
 async function loadSP() {
   if (systemPrompt) return systemPrompt;
   try {
     const r = await fetch(SP_URL + '?t=' + Date.now());
-    systemPrompt = await r.text();
-  } catch(e) {
-    systemPrompt = '당신은 Gopang Users 검색 에이전트입니다. 사용자의 자연어 요청을 분석하여 엔티티를 검색합니다. 반드시 JSON으로만 응답하십시오.';
-  }
+    if (r.ok) { systemPrompt = await r.text(); return systemPrompt; }
+  } catch {}
+  systemPrompt = `당신은 Gopang Users 엔티티 검색·해석 에이전트다.
+모든 응답은 반드시 JSON으로만 반환한다.
+[ok/TRANSACT] {"status":"ok","caller_echo":"...","intent":"TRANSACT","results":[...],"gwp_action":{"type":"DISPLAY_RESULTS"}}
+[ok/CONNECT]  {"status":"ok","caller_echo":"...","intent":"CONNECT","result":{...},"gwp_action":{"type":"OPEN_CHAT","target_guid":"..."}}
+[multiple]    {"status":"multiple_found","message":"...","candidates":[...]}
+[no_result]   {"status":"no_result","message":"검색 결과가 없습니다."}
+[clarify]     {"status":"clarify","message":"...","options":[...]}
+is_public=FALSE 엔티티 절대 노출 금지.`;
   return systemPrompt;
 }
 
@@ -338,13 +567,10 @@ function showScreen(id, el) {
   document.getElementById('screen-' + id)?.classList.add('active');
   document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
-  document.getElementById('content-area').scrollTop = 0;
 }
 
-/* ── 닫기 ── */
 function tryClose() {
-  if (window.opener) { window.close(); }
-  else { history.back(); }
+  if (window.opener) window.close(); else history.back();
 }
 
 /* ── 필터 ── */
@@ -359,47 +585,49 @@ function setFilter(el, type) {
 /* ── AI 채팅 ── */
 function qs(text) {
   showScreen('chat');
-  document.querySelectorAll('.tab-item')[0].classList.add('active');
+  document.querySelectorAll('.tab-item')[0]?.classList.add('active');
   document.getElementById('chat-input').value = text;
   sendMsg();
 }
 
 async function sendMsg() {
   const input = document.getElementById('chat-input');
-  const text = input.value.trim();
+  const text  = input.value.trim();
   if (!text) return;
   input.value = ''; input.style.height = 'auto';
-
   appendMsg('user', text);
   document.getElementById('snd-btn').disabled = true;
   showTyping();
-
   try {
     const sp = await loadSP();
-    chatHistory.push({role:'user', content: text});
+    chatHistory.push({ role: 'user', content: text });
+    const contextNote = [
+      `caller: users-webapp`,
+      `requester_guid: ${currentUser?.ipv6 || currentUser?.guid || 'unknown'}`,
+      userLocation ? `location: lat=${userLocation.lat}, lng=${userLocation.lng}` : '',
+      callerCtx?.caller ? `original_caller: ${callerCtx.caller}` : '',
+    ].filter(Boolean).join('\n');
 
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        system: sp + `\n\n[컨텍스트]\nrequester_ipv6: ${currentUser?.ipv6||'unknown'}\n모바일 환경: 짧고 명확하게 응답`,
-        messages: chatHistory
-      })
+    const r = await fetch(`${PROXY}/ai/chat`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system:     sp + '\n\n[컨텍스트]\n' + contextNote,
+        messages:   chatHistory,
+        max_tokens: 1500,
+      }),
     });
-    const data = await r.json();
-    const reply = data.content?.[0]?.text || '{}';
-    chatHistory.push({role:'assistant', content: reply});
+    const data  = await r.json();
+    const reply = data.content || data.reply || '{}';
+    chatHistory.push({ role: 'assistant', content: reply });
     removeTyping();
     handleReply(reply, text);
-  } catch(e) {
+  } catch {
     removeTyping();
-    /* 폴백: 더미 검색 */
-    const dummy = getDummy(text);
-    if (dummy.length) {
-      appendMsg('ai', `"${text}" 검색 결과 ${dummy.length}건입니다.`);
-      renderResults(dummy);
+    const fallback = getDummy(text);
+    if (fallback.length) {
+      appendMsg('ai', `"${text}" 검색 결과 ${fallback.length}건입니다. (로컬 데이터)`);
+      renderResultBub(fallback);
     } else {
       appendMsg('ai', '검색 결과가 없습니다. 다른 검색어를 시도해 보세요.');
     }
@@ -407,260 +635,320 @@ async function sendMsg() {
   document.getElementById('snd-btn').disabled = false;
 }
 
-/* ── AI 응답 처리 ── */
 function handleReply(raw, userText) {
   let parsed = null;
-  try { parsed = JSON.parse(raw); } catch(e) {}
-
+  try { parsed = JSON.parse(raw); } catch {}
   if (!parsed) { appendMsg('ai', raw); return; }
-
   if (parsed.status === 'clarify') {
     appendMsg('ai', parsed.message);
     if (parsed.options?.length) {
       const row = document.createElement('div');
-      row.className = 'quick-row';
-      row.innerHTML = parsed.options.map(o=>`<button class="qb" onclick="qs('${o}')">${o}</button>`).join('');
+      row.className = 'quick-chips';
+      row.innerHTML = parsed.options.map(o => `<button class="qchip" onclick="qs('${o}')">${o}</button>`).join('');
       document.getElementById('chat-body').appendChild(row);
-      scrollChat();
     }
-    return;
+    scrollChat(); return;
   }
-
   if (parsed.status === 'multiple_found') {
-    appendMsg('ai', parsed.message || '동명이인이 여럿 있습니다. 선택해 주세요.');
-    renderMulti(parsed.candidates || []);
-    return;
+    appendMsg('ai', parsed.message || '동명이인이 여럿 있습니다.');
+    renderMultiBub(parsed.candidates || []); return;
   }
-
-  const results = parsed.results ? parsed.results :
-    parsed.result ? [parsed.result] : [];
-
-  if (results.length === 0) {
-    appendMsg('ai', parsed.message || '검색 결과가 없습니다.');
-    if (parsed.suggestions?.length) {
-      const row = document.createElement('div');
-      row.className = 'quick-row';
-      row.innerHTML = parsed.suggestions.slice(0,3).map(s=>`<button class="qb" onclick="qs('${s}')">${s}</button>`).join('');
-      document.getElementById('chat-body').appendChild(row);
-      scrollChat();
-    }
-    return;
-  }
-
-  const label = parsed.intent === 'CONNECT' ? '연결할 엔티티를 찾았습니다.' :
-    `"${parsed.query_summary||userText}" 검색 결과 ${results.length}건입니다.`;
-  appendMsg('ai', label);
-  renderResults(results);
-
-  /* GWP 연결 액션이 있으면 바로 실행 */
-  if (parsed.gwp_action?.type === 'OPEN_CHAT' && results.length === 1) {
-    const r = results[0];
-    setTimeout(() => {
-      if (window.opener) {
-        window.opener.postMessage({
-          type:'GOPANG_CONNECT',
-          target_ipv6: r.current_ipv6,
-          target_guid: r.permanent_guid,
-          target_name: r.display_name||r.name
-        }, '*');
-      }
-    }, 1200);
-  }
+  const results = parsed.results ? parsed.results : parsed.result ? [parsed.result] : [];
+  if (!results.length) { appendMsg('ai', parsed.message || '검색 결과가 없습니다.'); return; }
+  appendMsg('ai', `"${parsed.query_summary||userText}" 검색 결과 ${results.length}건입니다.`);
+  renderResultBub(results);
 }
 
-/* ── 결과 렌더링 ── */
-function renderResults(results) {
-  const body = document.getElementById('chat-body');
-  const card = document.createElement('div');
-  card.className = 'r-card';
-  const isConnect = results[0]?.entity_type === 'person' || results[0]?.entity_type === 'concept';
-  card.innerHTML = `<div class="r-card-header">검색 결과 ${results.length}건</div>` +
-    results.slice(0,5).map(r => {
-      const emoji = {person:'🧑',org:'🏢',concept:'🤖',thing:'📡'}[r.entity_type]||'🌐';
-      const loc = [r.sigungu||r.location?.sigungu, r.dong||r.location?.dong].filter(Boolean).join(' ');
-      const trustBadge = `<span class="badge b-${r.trust_level||'L0'}">${r.trust_level||'L0'}</span>`;
-      const gdcBadge = r.gdc_accepted ? `<span class="badge b-gdc">₮ GDC</span>` : '';
-      const actionLabel = r.entity_type==='org' ? '거래' : '연결';
-      const actionClass = r.entity_type==='org' ? 'transact' : 'connect';
-      return `
-      <div class="r-item" onclick="doConnect('${r.permanent_guid}','${r.display_name||r.name}','${r.current_ipv6}','${r.entity_type}')">
-        <div class="r-av ${r.entity_type}">${emoji}</div>
-        <div class="r-info">
-          <div class="r-name">${r.display_name||r.name||'이름 없음'}</div>
-          <div class="r-badges">${trustBadge}${gdcBadge}</div>
-          ${loc?`<div class="r-sub">📍 ${loc}${r.occupation?' · '+r.occupation:''}</div>`:''}
-        </div>
-        <div class="r-action ${actionClass}">${actionLabel}</div>
-      </div>`;
-    }).join('');
-  body.appendChild(card);
-  scrollChat();
-}
+const typeIcon = {
+  person:  `<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  org:     `<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+  concept: `<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
+  thing:   `<svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`,
+};
 
-function renderMulti(candidates) {
+function renderResultBub(results) {
   const body = document.getElementById('chat-body');
-  const card = document.createElement('div');
-  card.className = 'multi-card';
-  card.innerHTML = `<div class="multi-header">🔍 ${candidates.length}명 — 선택해 주세요</div>` +
-    candidates.map((c,i)=>`
-      <div class="multi-item" onclick="doConnect('${c.permanent_guid}','${c.name}','${c.current_ipv6}','${c.entity_type||'person'}')">
-        <div class="multi-num">${i+1}</div>
-        <div>
-          <div class="multi-name">${c.name}</div>
-          <div class="multi-hint">${c.hint||''}</div>
+  const card = document.createElement('div'); card.className = 'r-bubble';
+  card.innerHTML = `<div class="r-bub-hd">검색 결과 ${results.length}건</div>` +
+    results.slice(0, 5).map(r => `
+      <div class="r-bub-row" onclick="doConnect('${r.guid}','${r.name||r.display_name}','${r.entity_type}')">
+        <div class="r-av">${typeIcon[r.entity_type]||typeIcon.org}</div>
+        <div style="flex:1;min-width:0">
+          <div class="r-name">${r.name||r.display_name||'–'}</div>
+          <div class="r-badge">
+            <span class="badge b-${r.trust_level||'L0'}">${r.trust_level||'L0'}</span>
+            ${r.gdc_accepted ? '<span class="badge b-gdc">₮ GDC</span>' : ''}
+          </div>
+          <div class="r-sub">${[r.address, r.occupation].filter(Boolean).join(' · ')||'–'}</div>
         </div>
-        <div class="multi-act">연결</div>
+        <div class="r-act">${r.entity_type==='org'?'거래':'연결'}</div>
       </div>`).join('');
-  body.appendChild(card);
-  scrollChat();
+  body.appendChild(card); scrollChat();
 }
 
-/* ── 연결 실행 ── */
-function doConnect(guid, name, ipv6, type) {
-  toast(`🔗 ${name} 연결 중…`);
-  const msgType = type === 'org' ? 'GOPANG_TRANSACT' : 'GOPANG_CONNECT';
-  if (window.opener) {
-    window.opener.postMessage({type: msgType, target_ipv6: ipv6, target_guid: guid, target_name: name}, '*');
-    setTimeout(() => window.close(), 700);
-  } else {
-    window.open(`https://[${ipv6}]/`, '_blank');
-  }
+function renderMultiBub(candidates) {
+  const body = document.getElementById('chat-body');
+  const card = document.createElement('div'); card.className = 'multi-bub';
+  card.innerHTML = `<div class="multi-bub-hd">동명이인 ${candidates.length}명 — 선택해 주세요</div>` +
+    candidates.map((c, i) => `
+      <div class="multi-bub-row" onclick="doConnect('${c.guid}','${c.name}','person')">
+        <div class="m-idx">${i+1}</div>
+        <div><div class="m-name">${c.name}</div><div class="m-hint">${c.hint||''}</div></div>
+        <div class="m-act">연결</div>
+      </div>`).join('');
+  body.appendChild(card); scrollChat();
 }
 
-/* ── 직접 검색 ── */
+/* ── 직접 검색 (Supabase search_entities RPC 직접 호출) ── */
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
   document.getElementById('search-results').innerHTML =
-    `<div class="sr-empty"><div class="sr-empty-icon">⏳</div><div style="font-size:13px;font-weight:600;color:#475569">검색 중…</div></div>`;
+    `<div class="sr-loading"><div class="spinner"></div>검색 중…</div>`;
+
+  const entityType  = callerCtx?.filter?.entity_type || currentFilter || null;
+  const occupation  = callerCtx?.filter?.occupation  || null;
+  const loc         = callerCtx?.location || userLocation || null;
+  const sort        = callerCtx?.sort     || 'rating';
+  const excludeGuid = currentUser?.guid   || currentUser?.ipv6 || null;
+
   try {
-    const res = await fetch(`${PROXY}/market/search`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:q, filter:currentFilter, context:{requester_ipv6:currentUser?.ipv6}})
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/search_entities`, {
+      method:  'POST',
+      headers: SB_HEADERS,
+      body: JSON.stringify({
+        p_entity_type:  entityType,
+        p_keyword:      q || null,
+        p_occupation:   occupation,
+        p_address:      callerCtx?.filter?.address  || null,
+        p_gdc_only:     callerCtx?.filter?.gdc_only || false,
+        p_trust_min:    callerCtx?.filter?.trust_min|| null,
+        p_lat:          loc?.lat  || null,
+        p_lng:          loc?.lng  || null,
+        p_sort:         sort,
+        p_limit:        10,
+        p_offset:       0,
+        p_exclude_guid: excludeGuid,
+      }),
     });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    renderSearchResults(data.results||data, q);
-  } catch(e) {
-    renderSearchResults(getDummy(q), q);
-  }
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    const rows = await res.json();
+    renderSearchList(Array.isArray(rows) ? rows : [], q);
+  } catch { renderSearchList(getDummy(q), q); }
 }
 
-function renderSearchResults(results, q) {
+function renderSearchList(results, q) {
   const el = document.getElementById('search-results');
   if (!results?.length) {
-    el.innerHTML = `<div class="sr-empty"><div class="sr-empty-icon">🔭</div><div style="font-size:14px;font-weight:600;color:#475569">"${q}" 결과 없음</div></div>`;
+    el.innerHTML = `<div class="sr-empty"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><div class="sr-empty-title">"${q}" 결과 없음</div></div>`;
     return;
   }
   el.innerHTML = results.map(r => {
-    const emoji = {person:'🧑',org:'🏢',concept:'🤖',thing:'📡'}[r.entity_type]||'🌐';
-    const loc = [r.sigungu||r.location?.sigungu, r.dong||r.location?.dong].filter(Boolean).join(' ');
-    const stars = r.rating_avg > 0 ? '★'.repeat(Math.round(r.rating_avg))+'☆'.repeat(5-Math.round(r.rating_avg)) : '';
-    const isConnect = r.entity_type==='person'||r.entity_type==='concept'||r.entity_type==='thing';
+    const isConnect = r.entity_type !== 'org';
+    const stars = r.rating_avg > 0 ? '★'.repeat(Math.round(r.rating_avg)) + ` ${Number(r.rating_avg).toFixed(1)}` : '';
     return `
     <div class="sr-item">
       <div class="sr-top">
-        <div class="sr-av">${emoji}</div>
+        <div class="sr-av">${typeIcon[r.entity_type]||typeIcon.org}</div>
         <div style="flex:1;min-width:0">
-          <div class="sr-name">${r.display_name||r.name}</div>
-          ${r.nickname?`<div class="sr-nick">@${r.nickname}</div>`:''}
+          <div class="sr-name">${r.name||'–'}</div>
+          ${r.nickname ? `<div class="sr-nick">@${r.nickname}</div>` : ''}
+          <div class="sr-badges">
+            <span class="badge b-${r.trust_level||'L0'}">${r.trust_level||'L0'}</span>
+            ${r.gdc_accepted ? '<span class="badge b-gdc">₮ GDC</span>' : ''}
+          </div>
         </div>
-        <span class="badge b-${r.trust_level||'L0'}" style="font-size:9px">${r.trust_level||'L0'}</span>
       </div>
-      ${r.bio?`<div class="sr-desc">${r.bio}</div>`:''}
-      ${loc?`<div class="sr-loc">📍 ${loc}</div>`:''}
-      ${stars?`<div class="sr-rating" style="color:#f59e0b">${stars} <span style="color:var(--txt2)">${r.rating_avg?.toFixed(1)} (${r.review_count})</span></div>`:''}
+      ${r.address ? `<div class="sr-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${r.address}</div>` : ''}
+      ${stars ? `<div style="font-size:11px;color:#d97706;margin-bottom:8px">${stars}</div>` : ''}
       <div class="sr-acts">
-        <button class="sr-act connect" onclick="doConnect('${r.permanent_guid}','${r.display_name||r.name}','${r.current_ipv6}','${r.entity_type}')">
-          ${isConnect?'연결':'채팅'}
+        <button class="sr-act connect" onclick="doConnect('${r.guid}','${r.name}','${r.entity_type}')">
+          ${isConnect ? '연결' : '채팅'}
         </button>
-        ${!isConnect?`<button class="sr-act transact" onclick="doConnect('${r.permanent_guid}','${r.display_name||r.name}','${r.current_ipv6}','${r.entity_type}')">거래</button>`:''}
+        ${!isConnect ? `<button class="sr-act outline" onclick="doConnect('${r.guid}','${r.name}','transact')">거래</button>` : ''}
       </div>
     </div>`;
   }).join('');
 }
 
+/* ── 연결 / 거래 선택 → caller에게 postMessage ── */
+function doConnect(guid, name, type) {
+  toast(`${name} 연결 중…`);
+  const msgType = type === 'transact' ? 'GOPANG_TRANSACT' : 'GOPANG_CONNECT';
+  const payload = {
+    type:        msgType,
+    target_guid: guid,
+    target_name: name,
+    caller_echo: callerCtx?.caller || 'users-webapp',
+  };
+  if (window.opener) {
+    window.opener.postMessage(payload, 'https://gopang.net');
+    setTimeout(() => window.close(), 700);
+  } else {
+    window.open(`https://gopang.net/?connect=${encodeURIComponent(guid)}`, '_blank');
+  }
+}
+
+/* ── 마이크 (webapp_manual v3.6 패턴) ── */
+function toggleMic() {
+  if (micActive) {
+    recognition?.stop();
+    micActive = false;
+    _micSetUI(false);
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // iOS 폴백: MediaRecorder 방식은 별도 서버 STT 필요 → 안내만
+  if (!SR) { toast('이 브라우저는 음성 인식을 지원하지 않습니다.'); return; }
+  // ★ getUserMedia() 선행 호출 없음 (webapp_manual §3.4)
+  recognition = new SR();
+  recognition.lang           = 'ko-KR';
+  recognition.continuous     = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (e) => {
+    const t     = e.results[0][0].transcript;
+    const input = document.getElementById('chat-input');
+    if (input && t) {
+      input.value = t;
+      // ★ autoResize + updateSendBtn 직접 호출 (dispatchEvent 절대 사용 금지)
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      const btn = document.getElementById('snd-btn');
+      if (btn) btn.disabled = !t.trim();
+    }
+    micActive = false;
+    _micSetUI(false);
+    // 자동 전송
+    if (t.trim()) setTimeout(() => sendMsg(), 300);
+  };
+  recognition.onerror = () => { micActive = false; _micSetUI(false); };
+  recognition.onend   = () => { micActive = false; _micSetUI(false); };
+
+  recognition.start();
+  micActive = true;
+  _micSetUI(true);
+}
+
+function _micSetUI(active) {
+  const btn = document.getElementById('mic-btn');
+  if (!btn) return;
+  btn.style.color = active ? 'var(--green)' : '';
+}
+
 /* ── 채팅 헬퍼 ── */
 function appendMsg(role, text) {
   const body = document.getElementById('chat-body');
-  const el = document.createElement('div');
-  el.className = role==='user' ? 'b-user' : 'b-ai';
-  el.innerHTML = text.replace(/\n/g,'<br>');
-  body.appendChild(el);
-  scrollChat();
+  const el   = document.createElement('div');
+  el.className = role === 'user' ? 'b-user' : 'b-ai';
+  el.innerHTML = text.replace(/\n/g, '<br>');
+  body.appendChild(el); scrollChat();
 }
 function showTyping() {
   const body = document.getElementById('chat-body');
-  const el = document.createElement('div');
-  el.className='typing'; el.id='typing-ind';
-  el.innerHTML='<span></span><span></span><span></span>';
+  const el   = document.createElement('div');
+  el.className = 'typing-bub'; el.id = 'typing-ind';
+  el.innerHTML = '<span></span><span></span><span></span>';
   body.appendChild(el); scrollChat();
 }
 function removeTyping() { document.getElementById('typing-ind')?.remove(); }
 function scrollChat() {
   const b = document.getElementById('chat-body');
-  requestAnimationFrame(()=>{ b.scrollTop = b.scrollHeight; });
+  requestAnimationFrame(() => { b.scrollTop = b.scrollHeight; });
 }
 
-/* ── 설정 시트 ── */
-function showSettings() {
-  document.getElementById('sheet-backdrop').classList.add('show');
+/* ── 시트 ── */
+function showSheet() {
+  document.getElementById('sheet-bd').classList.add('show');
   document.getElementById('bottom-sheet').classList.add('show');
 }
-function hideSettings() {
-  document.getElementById('sheet-backdrop').classList.remove('show');
+function hideSheet() {
+  document.getElementById('sheet-bd').classList.remove('show');
   document.getElementById('bottom-sheet').classList.remove('show');
 }
-function togglePublic() {
+
+/* ── is_public 토글 (Supabase user_profiles 직접 PATCH) ── */
+async function togglePublic() {
   isPublic = !isPublic;
-  document.getElementById('setting-public-val').textContent = isPublic ? '공개' : '비공개';
+  document.getElementById('pub-val').textContent = isPublic ? '공개' : '비공개';
   localStorage.setItem('gopang_user_public', isPublic);
-  toast(isPublic ? '🌐 검색 공개로 설정되었습니다.' : '🔒 검색 비공개로 설정되었습니다.');
+
+  const guid = currentUser?.guid || currentUser?.ipv6;
+  if (guid) {
+    try {
+      await fetch(
+        `${SB_URL}/rest/v1/user_profiles?guid=eq.${encodeURIComponent(guid)}`,
+        {
+          method:  'PATCH',
+          headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+          body:    JSON.stringify({ is_public: isPublic }),
+        }
+      );
+    } catch(e) { console.warn('[togglePublic] Supabase 동기화 실패:', e.message); }
+  }
+  toast(isPublic ? '검색 공개로 설정되었습니다.' : '검색 비공개로 설정되었습니다.');
 }
 
-/* ── IPv6 복사 ── */
+/* ── 유틸 ── */
 function copyIPv6() {
-  const ipv6 = currentUser?.ipv6 || document.getElementById('prof-ipv6').textContent;
-  if (!ipv6 || ipv6==='–') { toast('IPv6 주소가 없습니다.'); return; }
-  navigator.clipboard?.writeText(ipv6).then(()=>toast('📋 IPv6 주소 복사됨'));
+  const guid = currentUser?.ipv6 || currentUser?.guid;
+  if (!guid) { toast('주소 정보가 없습니다.'); return; }
+  navigator.clipboard?.writeText(guid).then(() => toast('주소 복사됨'));
 }
-
-/* ── 토스트 ── */
 function toast(msg) {
   const el = document.getElementById('toast');
-  el.textContent=msg; el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'), 2600);
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
 }
 
-/* ── 더미 데이터 ── */
+/* ── 더미 데이터 (desktop과 동일 구조, 축약) ── */
+const DUMMY_DB_W = [
+  { guid:'pguid-001', entity_type:'org', name:'할망국수', occupation:'한식',
+    services:['국수','고기국수'], address:'제주시 이도이동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.8, review_count:142 },
+  { guid:'pguid-002', entity_type:'org', name:'해녀카페', occupation:'카페',
+    services:['커피','말차'], address:'제주시 삼도이동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.6, review_count:89, nickname:'해녀카페' },
+  { guid:'pguid-005', entity_type:'org', name:'흑돼지명가', occupation:'한식',
+    services:['흑돼지','오겹살'], address:'제주시 노형동',
+    gdc_accepted:true, trust_level:'L3', rating_avg:4.9, review_count:201 },
+  { guid:'pguid-007', entity_type:'org', name:'우도다이빙클럽', occupation:'레저',
+    services:['다이빙','스노클링'], address:'제주시 우도면',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.9, review_count:67 },
+  { guid:'pguid-011', entity_type:'org', name:'제주짜장관', occupation:'중식',
+    services:['짜장면','짬뽕','탕수육'], address:'제주시 연동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.4, review_count:78 },
+  { guid:'pguid-p001', entity_type:'person', name:'홍길동', occupation:'농업',
+    services:[], address:'제주시 한림읍', gdc_accepted:false,
+    trust_level:'L1', rating_avg:0, review_count:0, nickname:'길동이' },
+  { guid:'pguid-010', entity_type:'concept', name:'K-Market AI', occupation:'AI',
+    services:['상품추천','배달중개'], address:'제주시 연동',
+    gdc_accepted:false, trust_level:'L0', rating_avg:0, review_count:0 },
+];
+
 function getDummy(q) {
-  const all = [
-    {permanent_guid:'pguid-jeju-001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0121',entity_type:'org',name:'할망국수',display_name:'할망국수',trust_level:'L2',occupation:'한식',services:['국수','고기국수','만두'],bio:'3대째 이어온 제주 전통 고기국수.',sigungu:'제주시',dong:'이도이동',gdc_accepted:true,rating_avg:4.8,review_count:142},
-    {permanent_guid:'pguid-jeju-002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0222',entity_type:'org',name:'해녀카페',display_name:'해녀카페',trust_level:'L2',occupation:'카페',services:['커피','말차'],bio:'해녀 출신 사장님의 바다뷰 카페.',sigungu:'제주시',gdc_accepted:true,rating_avg:4.6,review_count:89,nickname:'해녀카페'},
-    {permanent_guid:'pguid-jeju-005',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0513',entity_type:'org',name:'흑돼지명가',display_name:'흑돼지명가',trust_level:'L3',occupation:'한식',services:['흑돼지','오겹살'],bio:'제주 흑돼지 직영 농장. GDC 10% 할인.',sigungu:'제주시',gdc_accepted:true,rating_avg:4.9,review_count:201},
-    {permanent_guid:'pguid-jeju-007',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0722',entity_type:'org',name:'우도다이빙클럽',display_name:'우도다이빙클럽',trust_level:'L2',occupation:'레저',services:['스쿠버다이빙','스노클링'],bio:'우도 앞바다 전문 다이빙.',sigungu:'제주시',dong:'우도면',gdc_accepted:true,rating_avg:4.9,review_count:67},
-    {permanent_guid:'pguid-jeju-010',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0A00',entity_type:'concept',name:'K-Market AI',display_name:'K-Market AI',trust_level:'L0',occupation:'AI',bio:'Gopang K-Market AI 추천 에이전트.',sigungu:'제주시',gdc_accepted:false,rating_avg:0,review_count:0}
-  ];
-  const lower = q.toLowerCase();
-  return all.filter(r =>
-    r.name.toLowerCase().includes(lower) ||
-    (r.bio||'').includes(q) ||
-    (r.services||[]).some(s=>s.includes(lower)) ||
-    (r.occupation||'').includes(lower) ||
-    (r.sigungu||'').includes(q)
+  const l = (q||'').toLowerCase();
+  if (!l) return DUMMY_DB_W.slice(0, 5);
+  const r = DUMMY_DB_W.filter(r =>
+    r.name.toLowerCase().includes(l) ||
+    (r.services||[]).some(s => s.toLowerCase().includes(l)) ||
+    (r.occupation||'').toLowerCase().includes(l) ||
+    (r.address||'').toLowerCase().includes(l)
   );
+  return r.length ? r : DUMMY_DB_W.slice(0, 3);
 }
 
-/* ── 설정 로드 ── */
-(function(){
+/* ── 초기화 ── */
+(function() {
   const saved = localStorage.getItem('gopang_user_public');
   if (saved !== null) {
     isPublic = saved === 'true';
-    document.getElementById('setting-public-val').textContent = isPublic ? '공개' : '비공개';
+    document.getElementById('pub-val').textContent = isPublic ? '공개' : '비공개';
   }
 })();
 </script>
-
-<script src="https://gopang.net/subsystem-auth.js" onerror="console.warn('auth skip')"></script>
+<script type="module" src="https://gopang.net/auth/subsystem-auth.js"
+  onerror="console.warn('[auth] subsystem-auth.js 로드 실패')"></script>
 </body>
 </html>

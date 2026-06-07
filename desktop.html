@@ -866,63 +866,101 @@ input,textarea,select{font-family:'Inter',sans-serif}
 <div class="toast" id="toast"></div>
 
 <script>
-const PROXY  = 'https://gopang-proxy.tensor-city.workers.dev';
-const SP_URL = 'https://raw.githubusercontent.com/Openhash-Gopang/users/main/SP-USERS-v1_0.txt';
+// ════════════════════════════════════════════════════════════
+// users.gopang.net — desktop.html v2.1
+// 변경: 실제 DB(user_profiles 기반) + ctx 수신
+//       SP-USERS-v2_0 / AI 채팅은 Worker /ai/chat (기존)
+//       검색·is_public은 Supabase REST 직접 호출 (Worker 수정 없음)
+//       postMessage origin 고정 (보안)
+// ════════════════════════════════════════════════════════════
 
-let currentUser = null;
-let systemPrompt = null;
-let chatHistory  = [];
+const PROXY        = 'https://gopang-proxy.tensor-city.workers.dev';
+const SP_URL       = 'https://raw.githubusercontent.com/Openhash-Gopang/users/main/SP-USERS-v2_0.txt';
+const SB_URL       = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
+const SB_KEY       = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
+const SB_HEADERS   = { 'Content-Type':'application/json', 'apikey':SB_KEY, 'Authorization':'Bearer '+SB_KEY };
+
+let currentUser   = null;
+let systemPrompt  = null;
+let chatHistory   = [];
 let currentFilter = '';
-let currentResults = [];
+let currentResults= [];
+let userLocation  = null;  // { lat, lng, address }
+let callerCtx     = null;  // GWP ctx (SUBSYSTEM 호출 시)
 
-/* ── 인증 ── */
+/* ── 인증 콜백 (subsystem-auth.js → _onGopangAuth) ── */
 window._onGopangAuth = function(user) {
   currentUser = user;
-  const ipv6 = user.ipv6 || '';
-  const init = (user.name||'?').charAt(0).toUpperCase();
-  // 아이콘 레일 아바타
-  document.getElementById('sb-av').textContent = init;
-  // 슬라이드 메뉴 아바타 & 사용자 정보
-  document.getElementById('menu-av').textContent = init;
+  const ipv6 = user.ipv6 || user.guid || '';
+  const init = (user.name || '?').charAt(0).toUpperCase();
+  document.getElementById('sb-av').textContent    = init;
+  document.getElementById('menu-av').textContent  = init;
   document.getElementById('menu-uname').textContent = user.name || ipv6.slice(0,20) || '–';
   document.getElementById('menu-urole').textContent = `Trust ${user.trust_level||'L0'} · GAS v1.6`;
-  // 탑바
-  document.getElementById('my-ipv6-short').textContent = ipv6.slice(0,18)+'…';
+  document.getElementById('my-ipv6-short').textContent = ipv6.slice(0,18) + '…';
   document.getElementById('my-trust').textContent = `Trust ${user.trust_level||'L0'}`;
 };
 
-/* ── SP 로드 ── */
+/* ── SP 동적 로드 (GitHub raw URL, 세션 캐시) ── */
 async function loadSP() {
   if (systemPrompt) return systemPrompt;
   try {
     const r = await fetch(SP_URL + '?t=' + Date.now());
-    if (!r.ok) throw new Error();
-    systemPrompt = await r.text();
-  } catch {
-    systemPrompt = '당신은 Gopang Users 검색 에이전트입니다. 반드시 JSON으로만 응답하십시오.';
-  }
+    if (r.ok) { systemPrompt = await r.text(); return systemPrompt; }
+  } catch {}
+  systemPrompt = `당신은 Gopang Users 엔티티 검색·해석 에이전트다.
+모든 응답은 반드시 아래 JSON 스키마 중 하나로만 반환한다.
+[TRANSACT] {"status":"ok","caller_echo":"...","intent":"TRANSACT","query_summary":"...","results":[...],"gwp_action":{"type":"DISPLAY_RESULTS"}}
+[CONNECT]  {"status":"ok","caller_echo":"...","intent":"CONNECT","result":{...},"gwp_action":{"type":"OPEN_CHAT","target_guid":"..."}}
+[복수]     {"status":"multiple_found","message":"...","candidates":[...]}
+[없음]     {"status":"no_result","message":"검색 결과가 없습니다.","suggestions":[...]}
+[명확화]   {"status":"clarify","message":"...","options":[...]}
+is_public=FALSE 엔티티는 절대 노출하지 않는다. DB 조회 결과만 반환한다.`;
   return systemPrompt;
 }
+
+/* ── GWP ctx 파라미터 처리 (SUBSYSTEM 호출) ── */
+(function initCtx() {
+  const params = new URLSearchParams(location.search);
+  const ctxRaw = params.get('ctx');
+  const ctxEnc = params.get('ctx_enc');
+  if (!ctxRaw) return;
+  try {
+    const decoded = ctxEnc === 'b64'
+      ? decodeURIComponent(escape(atob(ctxRaw)))
+      : decodeURIComponent(ctxRaw);
+    callerCtx = JSON.parse(decoded);
+    // ctx에 query가 있으면 검색창에 자동 입력 후 실행
+    if (callerCtx.query) {
+      setTimeout(() => {
+        const inp = document.getElementById('search-input');
+        if (inp) { inp.value = callerCtx.query; doSearch(); }
+      }, 400);
+    }
+  } catch(e) { console.warn('[ctx] 파싱 실패:', e); }
+})();
+
+/* ── GPS 위치 초기화 ── */
+(function initLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => { userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+    () => {}
+  );
+})();
 
 /* ── 패널 전환 ── */
 function setMain(id, railEl) {
   document.querySelectorAll('.panel,.chat-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + id)?.classList.add('active');
-  // 아이콘 레일 active
   document.querySelectorAll('.sb-icon-btn').forEach(i => i.classList.remove('active'));
   if (railEl) railEl.classList.add('active');
-  else {
-    const r = document.getElementById('rail-' + id);
-    if (r) r.classList.add('active');
-  }
-  // 슬라이드 메뉴 active
+  else { const r = document.getElementById('rail-' + id); if (r) r.classList.add('active'); }
   document.querySelectorAll('.sb-menu-item').forEach(i => i.classList.remove('active'));
   const m = document.getElementById('menu-' + id);
   if (m) m.classList.add('active');
-  // 탑바 제목
   document.getElementById('topbar-section').textContent =
     id === 'chat' ? 'AI 검색 어시스턴트' : '엔티티 검색';
-  // 채팅 패널일 때 서브 사이드바 숨김
   const ss = document.getElementById('sub-sidebar');
   if (ss) ss.style.display = id === 'chat' ? 'none' : '';
 }
@@ -948,7 +986,8 @@ function setFilterPanel(type, el) {
   if (el) el.classList.add('active');
   currentFilter = type;
   document.querySelectorAll('.filter-chip').forEach(c => {
-    c.classList.toggle('active', c.textContent.trim() === {person:'자연인',org:'기관·사업체',concept:'AI',thing:'사물'}[type]);
+    const map = { person:'자연인', org:'기관·사업체', concept:'AI', thing:'사물' };
+    c.classList.toggle('active', c.textContent.trim() === (map[type]||''));
   });
   showState('initial');
 }
@@ -957,15 +996,23 @@ function quickFilter(type) {
   currentFilter = type;
   setMain('search', null);
   document.querySelectorAll('.filter-chip').forEach(c => {
-    const map = {person:'자연인',org:'기관·사업체',concept:'AI',thing:'사물'};
+    const map = { person:'자연인', org:'기관·사업체', concept:'AI', thing:'사물' };
     c.classList.toggle('active', c.textContent.trim() === (map[type]||''));
   });
   const q = document.getElementById('search-input').value.trim();
   showState('loading');
-  setTimeout(() => {
-    const results = searchDummy(q, type);
-    renderResults(results, q || ({person:'자연인',org:'기관·사업체',concept:'AI 에이전트',thing:'사물·기기'}[type]||type));
-  }, 150);
+  // 키워드 없을 때는 Supabase 직접, 있으면 doSearch로 위임
+  if (!q) {
+    fetch(`${SB_URL}/rest/v1/rpc/search_entities`, {
+      method: 'POST', headers: SB_HEADERS,
+      body: JSON.stringify({ p_entity_type: type, p_limit: 10, p_offset: 0 }),
+    })
+    .then(r => r.json())
+    .then(rows => renderResults(Array.isArray(rows) ? rows : [], {person:'자연인',org:'기관·사업체',concept:'AI 에이전트',thing:'사물·기기'}[type]||type))
+    .catch(() => renderResults(getDummy('', type), {person:'자연인',org:'기관·사업체',concept:'AI 에이전트',thing:'사물·기기'}[type]||type));
+  } else {
+    doSearch();
+  }
 }
 
 function setHint(text) {
@@ -974,93 +1021,50 @@ function setHint(text) {
   doSearch();
 }
 
-/* ── 검색 ── */
+/* ── 엔티티 검색 (Supabase search_entities RPC 직접 호출) ── */
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q && !currentFilter) return;
   showState('loading');
+
+  // callerCtx(SUBSYSTEM 전달)와 currentFilter 병합
+  const entityType = callerCtx?.filter?.entity_type || currentFilter || null;
+  const occupation = callerCtx?.filter?.occupation  || null;
+  const loc        = callerCtx?.location || userLocation || null;
+  const sort       = callerCtx?.sort     || 'rating';
+  const excludeGuid= currentUser?.guid || currentUser?.ipv6 || null;
+
   try {
-    const res = await fetch(`${PROXY}/users/search`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({query:q, filter:currentFilter, context:{requester_ipv6:currentUser?.ipv6}})
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/search_entities`, {
+      method:  'POST',
+      headers: SB_HEADERS,
+      body: JSON.stringify({
+        p_entity_type:  entityType,
+        p_keyword:      q || null,
+        p_occupation:   occupation,
+        p_address:      callerCtx?.filter?.address || null,
+        p_gdc_only:     callerCtx?.filter?.gdc_only || false,
+        p_trust_min:    callerCtx?.filter?.trust_min || null,
+        p_lat:          loc?.lat  || null,
+        p_lng:          loc?.lng  || null,
+        p_sort:         sort,
+        p_limit:        10,
+        p_offset:       0,
+        p_exclude_guid: excludeGuid,
+      }),
     });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    renderResults(data.results || data, q);
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    const rows = await res.json();
+    renderResults(Array.isArray(rows) ? rows : [], q);
   } catch {
-    // 프록시 미연결 시 더미 데이터로 폴백
-    renderResults(searchDummy(q, currentFilter), q);
+    renderResults(getDummy(q, currentFilter), q);
   }
-}
-
-function renderResults(results, q) {
-  currentResults = results;
-  if (!results?.length) {
-    showState('empty', `"${q}"에 대한 결과가 없습니다.`);
-    return;
-  }
-  showState('results');
-  document.getElementById('results-count').innerHTML =
-    `<strong>${results.length}건</strong>의 검색 결과`;
-  renderTable(results);
-}
-
-function renderTable(results) {
-  const typeLabel = {person:'자연인',org:'기관',concept:'AI',thing:'사물'};
-  const typeIcon = {
-    person: `<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-    org:    `<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
-    concept:`<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
-    thing:  `<svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`
-  };
-  document.getElementById('results-tbody').innerHTML = results.map(r => {
-    const isConnect = r.entity_type==='person'||r.entity_type==='concept'||r.entity_type==='thing';
-    const loc = [r.sigungu||r.location?.sigungu, r.dong||r.location?.dong].filter(Boolean).join(' ');
-    const ipv6s = (r.current_ipv6||'').replace('fd6f:7068:6173:','…:');
-    const stars = r.rating_avg > 0 ? '★'.repeat(Math.round(r.rating_avg)) + ` ${r.rating_avg?.toFixed(1)}` : '–';
-    return `<tr onclick="rowClick('${r.permanent_guid}')">
-      <td>
-        <div class="cell-entity">
-          <div class="cell-av">${typeIcon[r.entity_type]||typeIcon.person}</div>
-          <div>
-            <div class="cell-name">${r.display_name||r.name||'–'}</div>
-            ${r.nickname?`<div class="cell-nick">@${r.nickname}</div>`:''}
-          </div>
-        </div>
-      </td>
-      <td>
-        <span class="badge b-${r.entity_type}">${r.org_type||typeLabel[r.entity_type]||r.entity_type}</span>
-        ${r.gdc_accepted?'<span class="badge b-gdc" style="margin-left:4px">₮ GDC</span>':''}
-      </td>
-      <td><span class="badge b-${r.trust_level||'L0'}">${r.trust_level||'L0'}</span></td>
-      <td style="color:var(--txt2)">${loc||'–'}</td>
-      <td><div class="cell-ipv6" title="${r.current_ipv6||''}">${ipv6s}</div></td>
-      <td style="color:var(--txt2)">${stars}</td>
-      <td>
-        <div class="cell-actions">
-          <button class="act-btn act-connect"
-            onclick="event.stopPropagation();doConnect('${r.permanent_guid}','${r.display_name||r.name}','${r.current_ipv6}','${r.entity_type}')">
-            ${isConnect?'연결':'채팅'}
-          </button>
-          ${!isConnect?`<button class="act-btn act-outline"
-            onclick="event.stopPropagation();doConnect('${r.permanent_guid}','${r.display_name||r.name}','${r.current_ipv6}','transact')">
-            거래
-          </button>`:''}
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function rowClick(guid) {
-  const r = currentResults.find(x => x.permanent_guid === guid);
-  if (r) doConnect(r.permanent_guid, r.display_name||r.name, r.current_ipv6, r.entity_type);
 }
 
 function resort(by) {
   if (!currentResults.length) return;
-  const lv = {L3:3,L2:2,L1:1,L0:0};
-  const sorted = [...currentResults].sort((a,b) =>
+  const lv = { L3:3, L2:2, L1:1, L0:0 };
+  const sorted = [...currentResults].sort((a, b) =>
     by==='rating'  ? (b.rating_avg||0)-(a.rating_avg||0) :
     by==='review'  ? (b.review_count||0)-(a.review_count||0) :
     by==='trust'   ? (lv[b.trust_level]||0)-(lv[a.trust_level]||0) : 0
@@ -1068,24 +1072,94 @@ function resort(by) {
   renderTable(sorted);
 }
 
-/* ── 연결 ── */
-function doConnect(guid, name, ipv6, type) {
+/* ── 결과 렌더링 ── */
+function renderResults(results, q) {
+  currentResults = results;
+  if (!results?.length) { showState('empty', `"${q}"에 대한 결과가 없습니다.`); return; }
+  showState('results');
+  document.getElementById('results-count').innerHTML = `<strong>${results.length}건</strong>의 검색 결과`;
+  renderTable(results);
+}
+
+function renderTable(results) {
+  const typeLabel = { person:'자연인', org:'기관', concept:'AI', thing:'사물' };
+  const typeIcon  = {
+    person:  `<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    org:     `<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+    concept: `<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
+    thing:   `<svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`,
+  };
+  document.getElementById('results-tbody').innerHTML = results.map(r => {
+    const isConnect = r.entity_type === 'person' || r.entity_type === 'concept' || r.entity_type === 'thing';
+    // address에서 시군구/동 추출 (실제 DB는 address 자유형식 텍스트)
+    const loc   = r.address || '–';
+    const stars = r.rating_avg > 0
+      ? '★'.repeat(Math.round(r.rating_avg)) + ` ${Number(r.rating_avg).toFixed(1)}`
+      : '–';
+    const guidShort = (r.guid||'').slice(0,18) + '…';
+    return `<tr onclick="rowClick('${r.guid}')">
+      <td>
+        <div class="cell-entity">
+          <div class="cell-av">${typeIcon[r.entity_type]||typeIcon.org}</div>
+          <div>
+            <div class="cell-name">${r.name||'–'}</div>
+            ${r.nickname ? `<div class="cell-nick">@${r.nickname}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td>
+        <span class="badge b-${r.entity_type}">${typeLabel[r.entity_type]||r.entity_type}</span>
+        ${r.gdc_accepted ? '<span class="badge b-gdc" style="margin-left:4px">₮ GDC</span>' : ''}
+      </td>
+      <td><span class="badge b-${r.trust_level||'L0'}">${r.trust_level||'L0'}</span></td>
+      <td style="color:var(--txt2)">${loc}</td>
+      <td><div class="cell-ipv6" title="${r.guid||''}">${guidShort}</div></td>
+      <td style="color:var(--txt2)">${stars}</td>
+      <td>
+        <div class="cell-actions">
+          <button class="act-btn act-connect"
+            onclick="event.stopPropagation();doConnect('${r.guid}','${r.name}','${r.entity_type}')">
+            ${isConnect ? '연결' : '채팅'}
+          </button>
+          ${!isConnect ? `<button class="act-btn act-outline"
+            onclick="event.stopPropagation();doConnect('${r.guid}','${r.name}','transact')">
+            거래</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function rowClick(guid) {
+  const r = currentResults.find(x => x.guid === guid);
+  if (r) doConnect(r.guid, r.name, r.entity_type);
+}
+
+/* ── 연결 / 거래 선택 → caller에게 postMessage 반환 ── */
+function doConnect(guid, name, type) {
   toast(`${name} 연결 중…`);
-  const msgType = type==='transact' ? 'GOPANG_TRANSACT' : 'GOPANG_CONNECT';
+  const msgType = type === 'transact' ? 'GOPANG_TRANSACT' : 'GOPANG_CONNECT';
+  const payload = {
+    type:        msgType,
+    target_guid: guid,
+    target_name: name,
+    caller_echo: callerCtx?.caller || 'users-desktop',
+  };
   if (window.opener) {
-    window.opener.postMessage({type:msgType,target_ipv6:ipv6,target_guid:guid,target_name:name},'*');
-    setTimeout(()=>window.close(), 700);
+    window.opener.postMessage(payload, 'https://gopang.net');
+    setTimeout(() => window.close(), 700);
   } else {
-    window.open(`https://[${ipv6}]/`,'_blank');
+    // 직접 접속 시: gopang.net으로 연결 요청 전달
+    window.open(`https://gopang.net/?connect=${encodeURIComponent(guid)}`, '_blank');
   }
 }
 
-/* ── 상태 ── */
+/* ── 상태 뷰 ── */
 function showState(state, msg) {
-  document.getElementById('state-initial').style.display  = state==='initial'  ? 'flex':'none';
-  document.getElementById('state-loading').style.display  = state==='loading'  ? 'flex':'none';
-  document.getElementById('state-empty').style.display    = state==='empty'    ? 'flex':'none';
-  document.getElementById('results-container').style.display = state==='results'?'block':'none';
+  document.getElementById('state-initial').style.display  = state === 'initial'  ? 'flex' : 'none';
+  document.getElementById('state-loading').style.display  = state === 'loading'  ? 'flex' : 'none';
+  document.getElementById('state-empty').style.display    = state === 'empty'    ? 'flex' : 'none';
+  document.getElementById('results-container').style.display = state === 'results' ? 'block' : 'none';
   if (msg) document.getElementById('empty-msg').textContent = msg;
 }
 
@@ -1098,7 +1172,7 @@ function qs(text) {
 
 async function sendMsg() {
   const input = document.getElementById('chat-input');
-  const text = input.value.trim();
+  const text  = input.value.trim();
   if (!text) return;
   input.value = ''; input.style.height = 'auto';
   appendMsg('user', text);
@@ -1106,26 +1180,33 @@ async function sendMsg() {
   showTyping();
   try {
     const sp = await loadSP();
-    chatHistory.push({role:'user',content:text});
-    /* gopang-proxy /ai/chat 엔드포인트 경유 (Worker에서 API 키 처리) */
+    chatHistory.push({ role: 'user', content: text });
+    const contextNote = [
+      `caller: users-desktop`,
+      `requester_guid: ${currentUser?.ipv6 || currentUser?.guid || 'unknown'}`,
+      userLocation ? `location: lat=${userLocation.lat}, lng=${userLocation.lng}` : '',
+      `sort: rating`,
+    ].filter(Boolean).join('\n');
+
     const r = await fetch(`${PROXY}/ai/chat`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system: sp + `\n\n[컨텍스트]\nrequester_ipv6:${currentUser?.ipv6||'unknown'}\nlocation:제주특별자치도`,
-        messages: chatHistory,
-        max_tokens: 1000
-      })
+        system:     sp + '\n\n[컨텍스트]\n' + contextNote,
+        messages:   chatHistory,
+        max_tokens: 1500,
+      }),
     });
-    const data = await r.json();
-    const reply = data.content?.[0]?.text || data.reply || '{}';
-    chatHistory.push({role:'assistant',content:reply});
+    const data  = await r.json();
+    const reply = data.content || data.reply || '{}';
+    chatHistory.push({ role: 'assistant', content: reply });
     removeTyping();
     handleReply(reply, text);
   } catch {
     removeTyping();
-    const fallback = searchDummy(text, currentFilter);
+    const fallback = getDummy(text, currentFilter);
     if (fallback.length) {
-      appendMsg('ai', `"${text}" 검색 결과 ${fallback.length}건입니다. (로컬 더미 데이터)`);
+      appendMsg('ai', `"${text}" 검색 결과 ${fallback.length}건입니다. (로컬 데이터)`);
       renderResultBubble(fallback);
     } else {
       appendMsg('ai', '검색 결과가 없습니다. 다른 검색어를 시도해 보세요.');
@@ -1138,25 +1219,22 @@ function handleReply(raw, userText) {
   let parsed = null;
   try { parsed = JSON.parse(raw); } catch {}
   if (!parsed) { appendMsg('ai', raw); return; }
-  if (parsed.status==='clarify') {
+  if (parsed.status === 'clarify') {
     appendMsg('ai', parsed.message);
     if (parsed.options?.length) {
       const row = document.createElement('div');
       row.className = 'quick-chips';
-      row.innerHTML = parsed.options.map(o=>`<button class="qchip" onclick="qs('${o}')">${o}</button>`).join('');
+      row.innerHTML = parsed.options.map(o => `<button class="qchip" onclick="qs('${o}')">${o}</button>`).join('');
       document.getElementById('chat-body').appendChild(row);
     }
     scrollChat(); return;
   }
-  if (parsed.status==='multiple_found') {
-    appendMsg('ai', parsed.message||'동명이인이 여럿 있습니다. 선택해 주세요.');
-    renderMultiBubble(parsed.candidates||[]); return;
+  if (parsed.status === 'multiple_found') {
+    appendMsg('ai', parsed.message || '동명이인이 여럿 있습니다.');
+    renderMultiBubble(parsed.candidates || []); return;
   }
   const results = parsed.results ? parsed.results : parsed.result ? [parsed.result] : [];
-  if (!results.length) {
-    appendMsg('ai', parsed.message||'검색 결과가 없습니다.');
-    return;
-  }
+  if (!results.length) { appendMsg('ai', parsed.message || '검색 결과가 없습니다.'); return; }
   appendMsg('ai', `"${parsed.query_summary||userText}" 검색 결과 ${results.length}건입니다.`);
   renderResultBubble(results);
 }
@@ -1166,18 +1244,18 @@ function renderResultBubble(results) {
   const card = document.createElement('div');
   card.className = 'b-result';
   const typeIcon = {
-    person:`<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-    org:`<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
-    concept:`<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
-    thing:`<svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`
+    person:  `<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    org:     `<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+    concept: `<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
+    thing:   `<svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`,
   };
   card.innerHTML = `<div class="b-result-hd">검색 결과 ${results.length}건</div>` +
-    results.slice(0,5).map(r=>`
-      <div class="b-result-row" onclick="doConnect('${r.permanent_guid}','${r.display_name||r.name}','${r.current_ipv6}','${r.entity_type}')">
+    results.slice(0, 5).map(r => `
+      <div class="b-result-row" onclick="doConnect('${r.guid}','${r.name||r.display_name}','${r.entity_type}')">
         <div class="br-av">${typeIcon[r.entity_type]||typeIcon.org}</div>
         <div>
-          <div class="br-name">${r.display_name||r.name}</div>
-          <div class="br-sub">${[r.sigungu||r.location?.sigungu, r.occupation].filter(Boolean).join(' · ')||'–'}</div>
+          <div class="br-name">${r.name||r.display_name||'–'}</div>
+          <div class="br-sub">${[r.address, r.occupation].filter(Boolean).join(' · ')||'–'}</div>
         </div>
         <div class="br-act">${r.entity_type==='org'?'거래':'연결'}</div>
       </div>`).join('');
@@ -1190,8 +1268,8 @@ function renderMultiBubble(candidates) {
   const card = document.createElement('div');
   card.className = 'multi-card';
   card.innerHTML = `<div class="multi-hd">동명이인 ${candidates.length}명 — 선택해 주세요</div>` +
-    candidates.map((c,i)=>`
-      <div class="multi-row" onclick="doConnect('${c.permanent_guid}','${c.name}','${c.current_ipv6}','person')">
+    candidates.map((c, i) => `
+      <div class="multi-row" onclick="doConnect('${c.guid}','${c.name}','person')">
         <div class="multi-idx">${i+1}</div>
         <div><div class="multi-name">${c.name}</div><div class="multi-hint">${c.hint||''}</div></div>
         <div class="multi-act">연결</div>
@@ -1202,302 +1280,119 @@ function renderMultiBubble(candidates) {
 
 function appendMsg(role, text) {
   const body = document.getElementById('chat-body');
-  const el = document.createElement('div');
-  el.className = role==='user' ? 'b-user' : 'b-ai';
-  el.innerHTML = text.replace(/\n/g,'<br>');
+  const el   = document.createElement('div');
+  el.className = role === 'user' ? 'b-user' : 'b-ai';
+  el.innerHTML = text.replace(/\n/g, '<br>');
   body.appendChild(el);
   scrollChat();
 }
 function showTyping() {
   const body = document.getElementById('chat-body');
-  const el = document.createElement('div');
-  el.className='typing-bubble'; el.id='typing-ind';
-  el.innerHTML='<span></span><span></span><span></span>';
+  const el   = document.createElement('div');
+  el.className = 'typing-bubble'; el.id = 'typing-ind';
+  el.innerHTML = '<span></span><span></span><span></span>';
   body.appendChild(el); scrollChat();
 }
 function removeTyping() { document.getElementById('typing-ind')?.remove(); }
-function scrollChat() { const b=document.getElementById('chat-body'); requestAnimationFrame(()=>{b.scrollTop=b.scrollHeight;}); }
+function scrollChat() {
+  const b = document.getElementById('chat-body');
+  requestAnimationFrame(() => { b.scrollTop = b.scrollHeight; });
+}
 
 /* ── 유틸 ── */
 function copyIPv6() {
-  const ipv6 = currentUser?.ipv6;
-  if (!ipv6) { toast('IPv6 주소가 없습니다.'); return; }
-  navigator.clipboard?.writeText(ipv6).then(()=>toast('IPv6 주소 복사됨'));
+  const guid = currentUser?.ipv6 || currentUser?.guid;
+  if (!guid) { toast('주소 정보가 없습니다.'); return; }
+  navigator.clipboard?.writeText(guid).then(() => toast('주소 복사됨'));
 }
 function toast(msg) {
-  const el=document.getElementById('toast');
-  el.textContent=msg; el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),2600);
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-/* ══════════════════════════════════════════════════════
-   더미 데이터 — 30개 엔티티 (제주 파일럿)
-   entity_type: person / org / concept / thing
-══════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   로컬 더미 데이터 — 실제 user_profiles 구조 기반
+   Supabase RPC 오프라인 폴백용
+   (desktop + webapp 공통 구조)
+════════════════════════════════════════════════════════════ */
 const DUMMY_DB = [
-  /* ── 기관·사업체 (org) ── */
-  {permanent_guid:'pguid-001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0121',
-   entity_type:'org',org_type:'주식회사',name:'할망국수',display_name:'할망국수',
-   nickname:'할망국수',trust_level:'L2',occupation:'한식',
-   services:['국수','고기국수','만두','순대국'],
-   tags:['한식','국수','전통'],bio:'3대째 이어온 제주 전통 고기국수. 직접 끓인 돼지뼈 육수.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'이도이동',
-   lat:33.499,lng:126.531,gdc_accepted:true,rating_avg:4.8,review_count:142},
-
-  {permanent_guid:'pguid-002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0222',
-   entity_type:'org',org_type:'개인사업자',name:'해녀카페',display_name:'해녀카페',
-   nickname:'해녀카페',trust_level:'L2',occupation:'카페',
-   services:['아메리카노','라떼','제주말차','귤에이드','흑임자라떼'],
-   tags:['카페','말차','바다뷰'],bio:'해녀 출신 사장님이 운영하는 바다뷰 카페. 제주 말차 특산품.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'삼도이동',
-   lat:33.510,lng:126.519,gdc_accepted:true,rating_avg:4.6,review_count:89},
-
-  {permanent_guid:'pguid-003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0311',
-   entity_type:'org',org_type:'주식회사',name:'제주감귤마트',display_name:'제주감귤마트',
-   trust_level:'L1',occupation:'소매',
-   services:['한라봉','천혜향','감귤','레드향','황금향'],
-   tags:['감귤','과일','직거래'],bio:'제주도 직거래 감귤 전문 마트. 계절별 다양한 품종 취급.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'서귀동',
-   lat:33.246,lng:126.563,gdc_accepted:false,rating_avg:4.5,review_count:67},
-
-  {permanent_guid:'pguid-004',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0413',
-   entity_type:'org',org_type:'주식회사',name:'한라산스쿠터',display_name:'한라산스쿠터',
-   nickname:'한라스쿠터',trust_level:'L3',occupation:'렌탈',
-   services:['전동스쿠터','자전거','헬멧','전동킥보드'],
-   tags:['렌탈','스쿠터','투어'],bio:'한라산 둘레길 탐방 최적화 스쿠터 렌탈. GPS 포함.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
-   lat:33.450,lng:126.574,gdc_accepted:true,rating_avg:4.3,review_count:34},
-
-  {permanent_guid:'pguid-005',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0513',
-   entity_type:'org',org_type:'주식회사',name:'흑돼지명가',display_name:'흑돼지명가',
-   nickname:'흑돼지명가',trust_level:'L3',occupation:'한식',
-   services:['제주흑돼지','오겹살','항정살','흑돼지김치찌개'],
-   tags:['흑돼지','한식','직영'],bio:'제주 흑돼지 직영 농장 운영. GDC 결제 10% 할인.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'노형동',
-   lat:33.491,lng:126.488,gdc_accepted:true,rating_avg:4.9,review_count:201},
-
-  {permanent_guid:'pguid-006',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0622',
-   entity_type:'org',org_type:'주식회사',name:'제주일주투어',display_name:'제주일주투어',
-   trust_level:'L2',occupation:'관광',
-   services:['일주버스','오름투어','해안투어','승마','제주올레'],
-   tags:['투어','관광','버스'],bio:'제주 일주 코스 맞춤형 소그룹 투어. 한국어/영어 가이드.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'한림읍',
-   lat:33.405,lng:126.266,gdc_accepted:true,rating_avg:4.6,review_count:56},
-
-  {permanent_guid:'pguid-007',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0722',
-   entity_type:'org',org_type:'사단법인',name:'우도다이빙클럽',display_name:'우도다이빙클럽',
-   nickname:'우도다이빙',trust_level:'L2',occupation:'레저',
-   services:['스쿠버다이빙','스노클링','체험다이빙','수중사진'],
-   tags:['다이빙','레저','우도'],bio:'우도 앞바다 전문 다이빙 클럽. 초보자 체험 과정 운영.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'우도면',
-   lat:33.508,lng:126.952,gdc_accepted:true,rating_avg:4.9,review_count:67},
-
-  {permanent_guid:'pguid-008',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0811',
-   entity_type:'org',org_type:'개인사업자',name:'모슬포해산물',display_name:'모슬포해산물',
-   trust_level:'L1',occupation:'해산물',
-   services:['갈치','옥돔','해산물','활어','전복'],
-   tags:['해산물','수산','직판'],bio:'모슬포항 직판 신선 해산물. 택배 가능.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'대정읍',
-   lat:33.239,lng:126.241,gdc_accepted:false,rating_avg:4.7,review_count:134},
-
-  {permanent_guid:'pguid-009',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0922',
-   entity_type:'org',org_type:'주식회사',name:'오름펜션',display_name:'오름펜션',
-   trust_level:'L2',occupation:'숙박',
-   services:['펜션','객실','조식','별자리관측','BBQ'],
-   tags:['숙박','펜션','오름'],bio:'한라산 오름 인근 감성 펜션. 별자리 관측 프로그램.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'남원읍',
-   lat:33.290,lng:126.714,gdc_accepted:true,rating_avg:4.7,review_count:112},
-
-  {permanent_guid:'pguid-011',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0B22',
-   entity_type:'org',org_type:'주식회사',name:'제주짜장관',display_name:'제주짜장관',
-   trust_level:'L2',occupation:'중식',
-   services:['짜장면','짬뽕','탕수육','볶음밥','군만두'],
-   tags:['중식','짜장면','배달'],bio:'제주산 흑돼지 고명 짜장면. 배달 가능.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
-   lat:33.488,lng:126.491,gdc_accepted:true,rating_avg:4.4,review_count:78},
-
-  {permanent_guid:'pguid-012',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0C11',
-   entity_type:'org',org_type:'개인사업자',name:'오메기베이커리',display_name:'오메기베이커리',
-   trust_level:'L1',occupation:'베이커리',
-   services:['오메기떡','쑥떡','메밀빵','크루아상','제주소금빵'],
-   tags:['베이커리','떡','전통'],bio:'제주 전통 오메기떡과 현대적 베이커리의 조화.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'삼양동',
-   lat:33.521,lng:126.548,gdc_accepted:false,rating_avg:4.5,review_count:88},
-
-  {permanent_guid:'pguid-013',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0D22',
-   entity_type:'org',org_type:'주식회사',name:'제주한치초밥',display_name:'제주한치초밥',
-   trust_level:'L2',occupation:'일식',
-   services:['한치초밥','성게덮밥','회','새우튀김롤','참치'],
-   tags:['일식','초밥','한치'],bio:'우도 해녀가 직접 잡은 한치로 만든 초밥 전문점.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'중문동',
-   lat:33.251,lng:126.412,gdc_accepted:true,rating_avg:4.8,review_count:93},
-
-  /* ── 자연인 (person) ── */
-  {permanent_guid:'pguid-p001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1111',
-   entity_type:'person',name:'홍길동',display_name:'홍길동',
-   nickname:'길동이',trust_level:'L1',occupation:'농업',
-   services:[],tags:['농업','제주'],bio:'제주 한림읍에서 감귤 농사를 짓는 농부.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'한림읍',
-   lat:33.413,lng:126.268,gdc_accepted:false,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-p002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:1211',
-   entity_type:'person',name:'홍길동',display_name:'홍길동',
-   trust_level:'L2',occupation:'어업',
-   services:[],tags:['어업','서귀포'],bio:'서귀포 대정읍 어부. 갈치·옥돔 전문.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'대정읍',
-   lat:33.237,lng:126.239,gdc_accepted:true,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-p003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1311',
-   entity_type:'person',name:'김제주',display_name:'김제주',
-   nickname:'제주토박이',trust_level:'L2',occupation:'관광가이드',
-   services:['오름투어','올레길안내','제주역사해설'],
-   tags:['가이드','관광'],bio:'제주 토박이 관광 가이드. 오름·올레길 전문.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'이도이동',
-   lat:33.501,lng:126.528,gdc_accepted:true,rating_avg:4.9,review_count:34},
-
-  {permanent_guid:'pguid-p004',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:1411',
-   entity_type:'person',name:'이해녀',display_name:'이해녀',
-   nickname:'해녀할머니',trust_level:'L3',occupation:'해녀',
-   services:['전복','소라','성게','해산물채취'],
-   tags:['해녀','전통','서귀포'],bio:'40년 경력 해녀. 우도 앞바다 전통 물질.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'성산읍',
-   lat:33.387,lng:126.872,gdc_accepted:true,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-p005',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1511',
-   entity_type:'person',name:'박변호사',display_name:'박변호사',
-   nickname:'제주법률',trust_level:'L3',occupation:'법률',
-   services:['부동산법률상담','기업법무','민사소송'],
-   tags:['법률','변호사'],bio:'제주지방법원 전문 변호사. 부동산·기업 전문.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'일도이동',
-   lat:33.511,lng:126.522,gdc_accepted:false,rating_avg:4.7,review_count:22},
-
-  {permanent_guid:'pguid-p006',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1611',
-   entity_type:'person',name:'최의사',display_name:'최의사',
-   trust_level:'L3',occupation:'의료',
-   services:['내과진료','건강상담','처방'],
-   tags:['의료','내과'],bio:'제주 내과 전문의. 만성질환 관리 전문.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'노형동',
-   lat:33.489,lng:126.487,gdc_accepted:false,rating_avg:4.8,review_count:11},
-
-  /* ── AI 에이전트 (concept) ── */
-  {permanent_guid:'pguid-010',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0A00',
-   entity_type:'concept',name:'K-Market AI',display_name:'K-Market AI',
-   nickname:'마켓AI',trust_level:'L0',occupation:'AI',
-   services:['상품추천','가격비교','배달중개','재고조회'],
-   tags:['AI','추천','검색'],bio:'Gopang K-Market 지역 AI 추천 에이전트.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
-   lat:33.488,lng:126.491,gdc_accepted:false,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-ai002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0B00',
-   entity_type:'concept',name:'K-Law AI',display_name:'K-Law AI',
-   nickname:'법률AI',trust_level:'L1',occupation:'AI',
-   services:['법률상담','판례검색','계약서검토','법령해석'],
-   tags:['AI','법률','상담'],bio:'Gopang K-Law 법률 AI 에이전트. 제주 지역 법률 특화.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'일도이동',
-   lat:33.511,lng:126.522,gdc_accepted:false,rating_avg:4.2,review_count:45},
-
-  {permanent_guid:'pguid-ai003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0C00',
-   entity_type:'concept',name:'K-Health AI',display_name:'K-Health AI',
-   nickname:'건강AI',trust_level:'L1',occupation:'AI',
-   services:['건강상담','증상분석','병원추천','약품정보'],
-   tags:['AI','건강','의료'],bio:'Gopang K-Health 의료 AI 에이전트. 1차 건강 상담.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
-   lat:33.452,lng:126.575,gdc_accepted:false,rating_avg:4.0,review_count:33},
-
-  {permanent_guid:'pguid-ai004',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0D00',
-   entity_type:'concept',name:'Users AI',display_name:'Users AI',
-   nickname:'유저AI',trust_level:'L0',occupation:'AI',
-   services:['엔티티검색','연결중개','닉네임해석','IPv6조회'],
-   tags:['AI','검색','연결'],bio:'Gopang Users 엔티티 검색·연결 AI 에이전트.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
-   lat:33.488,lng:126.491,gdc_accepted:false,rating_avg:0,review_count:0},
-
-  /* ── 사물·기기 (thing) ── */
-  {permanent_guid:'pguid-t001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:E001',
-   entity_type:'thing',name:'제주공항 스마트게이트 #1',display_name:'제주공항 스마트게이트 #1',
-   trust_level:'L2',occupation:'공항시설',
-   services:['탑승권인식','여권스캔','생체인증'],
-   tags:['공항','스마트게이트','IoT'],bio:'제주국제공항 1번 스마트 출국 게이트.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'용담이동',
-   lat:33.511,lng:126.493,gdc_accepted:false,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-t002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:E002',
-   entity_type:'thing',name:'한라산 기상관측소',display_name:'한라산 기상관측소',
-   trust_level:'L3',occupation:'기상관측',
-   services:['기온','풍속','강수량','일조량','실시간기상'],
-   tags:['기상','IoT','관측'],bio:'한라산 정상 1950m 기상관측 IoT 기기.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
-   lat:33.361,lng:126.529,gdc_accepted:false,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-t003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:E003',
-   entity_type:'thing',name:'성산일출봉 입장 단말기',display_name:'성산일출봉 입장 단말기',
-   trust_level:'L2',occupation:'관광시설',
-   services:['입장권발권','GDC결제','관람객통계'],
-   tags:['관광','IoT','GDC'],bio:'성산일출봉 GDC 결제 지원 스마트 입장 단말기.',
-   sido:'제주특별자치도',sigungu:'서귀포시',dong:'성산읍',
-   lat:33.459,lng:126.942,gdc_accepted:true,rating_avg:0,review_count:0},
-
-  /* ── 공공기관 (org/공공기관) ── */
-  {permanent_guid:'pguid-pub001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:F001',
-   entity_type:'org',org_type:'공공기관',name:'제주특별자치도청',display_name:'제주특별자치도청',
-   nickname:'제주도청',trust_level:'L3',occupation:'행정',
-   services:['민원접수','행정서비스','복지신청','인허가'],
-   tags:['행정','공공','민원'],bio:'제주특별자치도 도정 행정 서비스.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
-   lat:33.489,lng:126.498,gdc_accepted:false,rating_avg:0,review_count:0},
-
-  {permanent_guid:'pguid-pub002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:F002',
-   entity_type:'org',org_type:'공공기관',name:'제주관광공사',display_name:'제주관광공사',
-   nickname:'제주관광',trust_level:'L3',occupation:'관광행정',
-   services:['관광안내','투어패키지','관광지정보','축제안내'],
-   tags:['관광','공공','제주'],bio:'제주 관광 진흥 공기업. 제주 여행 공식 안내.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'삼도이동',
-   lat:33.508,lng:126.520,gdc_accepted:false,rating_avg:4.1,review_count:28},
-
-  {permanent_guid:'pguid-pub003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:F003',
-   entity_type:'org',org_type:'재단법인',name:'제주연구원',display_name:'제주연구원',
-   trust_level:'L2',occupation:'연구',
-   services:['정책연구','지역개발연구','환경연구'],
-   tags:['연구','재단','정책'],bio:'제주 지역 정책·환경·개발 전문 연구기관.',
-   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
-   lat:33.448,lng:126.572,gdc_accepted:false,rating_avg:0,review_count:0},
+  // ── 기관·사업체 (org) ──
+  { guid:'pguid-001', entity_type:'org', name:'할망국수', occupation:'한식',
+    services:['국수','고기국수','만두','순대국'], address:'제주시 이도이동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.8, review_count:142,
+    lat:33.499, lng:126.531, website:null, is_public:true },
+  { guid:'pguid-002', entity_type:'org', name:'해녀카페', occupation:'카페',
+    services:['아메리카노','라떼','제주말차','귤에이드'], address:'제주시 삼도이동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.6, review_count:89,
+    lat:33.510, lng:126.519, nickname:'해녀카페', website:null, is_public:true },
+  { guid:'pguid-003', entity_type:'org', name:'제주감귤마트', occupation:'소매',
+    services:['한라봉','천혜향','감귤','레드향'], address:'서귀포시 서귀동',
+    gdc_accepted:false, trust_level:'L1', rating_avg:4.5, review_count:67,
+    lat:33.246, lng:126.563, website:null, is_public:true },
+  { guid:'pguid-005', entity_type:'org', name:'흑돼지명가', occupation:'한식',
+    services:['제주흑돼지','오겹살','항정살','흑돼지김치찌개'], address:'제주시 노형동',
+    gdc_accepted:true, trust_level:'L3', rating_avg:4.9, review_count:201,
+    lat:33.491, lng:126.488, website:null, is_public:true },
+  { guid:'pguid-007', entity_type:'org', name:'우도다이빙클럽', occupation:'레저',
+    services:['스쿠버다이빙','스노클링','체험다이빙'], address:'제주시 우도면',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.9, review_count:67,
+    lat:33.508, lng:126.952, website:null, is_public:true },
+  { guid:'pguid-011', entity_type:'org', name:'제주짜장관', occupation:'중식',
+    services:['짜장면','짬뽕','탕수육','볶음밥','군만두'], address:'제주시 연동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.4, review_count:78,
+    lat:33.488, lng:126.491, website:null, is_public:true },
+  { guid:'pguid-009', entity_type:'org', name:'오름펜션', occupation:'숙박',
+    services:['펜션','객실','조식','별자리관측','BBQ'], address:'서귀포시 남원읍',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.7, review_count:112,
+    lat:33.290, lng:126.714, website:null, is_public:true },
+  // ── 자연인 (person) ──
+  { guid:'pguid-p001', entity_type:'person', name:'홍길동', occupation:'농업',
+    services:[], address:'제주시 한림읍', gdc_accepted:false,
+    trust_level:'L1', rating_avg:0, review_count:0, lat:33.413, lng:126.268,
+    website:null, is_public:true, nickname:'길동이' },
+  { guid:'pguid-p002', entity_type:'person', name:'홍길동', occupation:'어업',
+    services:[], address:'서귀포시 대정읍', gdc_accepted:true,
+    trust_level:'L2', rating_avg:0, review_count:0, lat:33.237, lng:126.239,
+    website:null, is_public:true },
+  { guid:'pguid-p003', entity_type:'person', name:'김제주', occupation:'관광가이드',
+    services:['오름투어','올레길안내'], address:'제주시 이도이동',
+    gdc_accepted:true, trust_level:'L2', rating_avg:4.9, review_count:34,
+    lat:33.501, lng:126.528, website:null, is_public:true, nickname:'제주토박이' },
+  // ── AI 에이전트 (concept) ──
+  { guid:'pguid-010', entity_type:'concept', name:'K-Market AI', occupation:'AI',
+    services:['상품추천','가격비교','배달중개'], address:'제주시 연동',
+    gdc_accepted:false, trust_level:'L0', rating_avg:0, review_count:0,
+    lat:33.488, lng:126.491, website:'https://market.gopang.net', is_public:true },
+  { guid:'pguid-ai002', entity_type:'concept', name:'K-Law AI', occupation:'AI',
+    services:['법률상담','판례검색','계약서검토'], address:'제주시 일도이동',
+    gdc_accepted:false, trust_level:'L1', rating_avg:4.2, review_count:45,
+    lat:33.511, lng:126.522, website:'https://klaw.gopang.net', is_public:true },
 ];
 
-/* ── 품목 동의어 테이블 ── */
 const SYNONYMS = {
   '짜장면':['짜장면','자장면','중식','짜장','차이니즈'],
-  '자장면':['짜장면','자장면','중식'],
-  '커피':['커피','아메리카노','카페','라떼','에스프레소'],
-  '카페':['카페','커피','라떼','아메리카노'],
-  '치킨':['치킨','닭','후라이드','양념','통닭'],
+  '커피':  ['커피','아메리카노','카페','라떼','에스프레소'],
+  '카페':  ['카페','커피','라떼','아메리카노'],
+  '치킨':  ['치킨','닭','후라이드','양념','통닭'],
   '흑돼지':['흑돼지','삼겹살','오겹살','돼지','항정살'],
-  '삼겹살':['삼겹살','흑돼지','오겹살','돼지고기'],
+  '감귤':  ['감귤','한라봉','천혜향','귤','레드향'],
   '다이빙':['다이빙','스쿠버','스노클링','수중'],
-  '스쿠버':['스쿠버','다이빙','스노클링'],
-  '감귤':['감귤','한라봉','천혜향','귤','레드향'],
-  '한식':['한식','국수','밥','찌개','구이'],
-  '숙박':['숙박','펜션','호텔','민박','게스트하우스'],
-  '투어':['투어','관광','여행','가이드','트레킹'],
-  '해산물':['해산물','수산','생선','조개','새우','전복'],
-  '의료':['의료','의사','병원','진료','건강'],
-  '법률':['법률','변호사','상담','소송','법무'],
-  'AI':['AI','인공지능','에이전트','챗봇','어시스턴트'],
+  '숙박':  ['숙박','펜션','호텔','민박','게스트하우스'],
+  '해산물':['해산물','수산','생선','조개','전복'],
+  '법률':  ['법률','변호사','상담','소송'],
+  'AI':    ['AI','인공지능','에이전트','챗봇'],
 };
 
-/* ── 스마트 검색 엔진 ── */
 function getDummy(q, filterType) {
   if (!q && !filterType) return DUMMY_DB.slice(0, 10);
   const lower = (q||'').toLowerCase().trim();
-
-  // 동의어 확장
   let keywords = [lower];
   for (const [key, syns] of Object.entries(SYNONYMS)) {
     if (syns.some(s => lower.includes(s) || s.includes(lower))) {
       keywords = [...new Set([...keywords, ...syns])];
     }
   }
-
-  // 닉네임 @ 검색
   const isNick = lower.startsWith('@');
   const nickQ  = isNick ? lower.slice(1) : null;
 
@@ -1507,67 +1402,34 @@ function getDummy(q, filterType) {
       let score = 0;
       const rname  = (r.name||'').toLowerCase();
       const rnick  = (r.nickname||'').toLowerCase();
-      const rbio   = (r.bio||'').toLowerCase();
       const rocc   = (r.occupation||'').toLowerCase();
-      const rsido  = (r.sido||'').toLowerCase();
-      const rsigun = (r.sigungu||'').toLowerCase();
-      const rdong  = (r.dong||'').toLowerCase();
-      const rtags  = (r.tags||[]).map(t=>t.toLowerCase());
-      const rsvc   = (r.services||[]).map(s=>s.toLowerCase());
+      const raddr  = (r.address||'').toLowerCase();
+      const rsvc   = (r.services||[]).map(s => s.toLowerCase());
 
       if (!lower && filterType) return { r, score: r.rating_avg||0 };
 
-      // 닉네임 정확 매칭 (최고 우선순위)
-      if (nickQ && rnick === nickQ) score += 100;
-      if (nickQ && rnick.includes(nickQ)) score += 60;
-
-      // 이름 정확 매칭
-      if (rname === lower) score += 80;
-      if (rname.includes(lower)) score += 40;
-
-      // 서비스 정확 매칭
+      if (nickQ && rnick === nickQ)        score += 100;
+      if (nickQ && rnick.includes(nickQ))  score += 60;
+      if (rname === lower)                  score += 80;
+      if (rname.includes(lower))            score += 40;
       keywords.forEach(kw => {
-        if (rsvc.some(s => s === kw)) score += 30;
+        if (rsvc.some(s => s === kw))        score += 30;
         if (rsvc.some(s => s.includes(kw) || kw.includes(s))) score += 15;
+        if (rocc === kw)                     score += 25;
+        if (rocc.includes(kw))               score += 12;
+        if (raddr.includes(kw))              score += 10;
       });
-
-      // 업종 매칭
-      keywords.forEach(kw => {
-        if (rocc === kw) score += 25;
-        if (rocc.includes(kw)) score += 12;
-      });
-
-      // 태그 매칭
-      keywords.forEach(kw => {
-        if (rtags.some(t => t === kw)) score += 20;
-        if (rtags.some(t => t.includes(kw) || kw.includes(t))) score += 8;
-      });
-
-      // 위치 매칭
-      keywords.forEach(kw => {
-        if (rsigun.includes(kw) || kw.includes(rsigun)) score += 15;
-        if (rdong.includes(kw) || kw.includes(rdong)) score += 10;
-        if (rsido.includes(kw)) score += 5;
-      });
-
-      // 소개문 포함
-      if (lower && rbio.includes(lower)) score += 8;
-      keywords.forEach(kw => { if (kw && rbio.includes(kw)) score += 4; });
-
       return { r, score };
     })
     .filter(x => x.score > 0)
     .sort((a, b) => b.score - a.score || (b.r.rating_avg||0) - (a.r.rating_avg||0))
     .map(x => x.r);
 
-  return scored.length ? scored : (filterType ? DUMMY_DB.filter(r=>r.entity_type===filterType).slice(0,5) : []);
-}
-
-/* ── 더미 검색 진입점 (doSearch에서 호출) ── */
-function searchDummy(q, filterType) {
-  return getDummy(q, filterType);
+  return scored.length ? scored
+    : (filterType ? DUMMY_DB.filter(r => r.entity_type===filterType).slice(0,5) : []);
 }
 </script>
-<script src="https://gopang.net/subsystem-auth.js" onerror="console.warn('auth skip')"></script>
+<script type="module" src="https://gopang.net/auth/subsystem-auth.js"
+  onerror="console.warn('[auth] subsystem-auth.js 로드 실패')"></script>
 </body>
 </html>
