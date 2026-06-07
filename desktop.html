@@ -954,7 +954,18 @@ function setFilterPanel(type, el) {
 }
 
 function quickFilter(type) {
-  setFilterPanel(type, null);
+  currentFilter = type;
+  setMain('search', null);
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    const map = {person:'자연인',org:'기관·사업체',concept:'AI',thing:'사물'};
+    c.classList.toggle('active', c.textContent.trim() === (map[type]||''));
+  });
+  const q = document.getElementById('search-input').value.trim();
+  showState('loading');
+  setTimeout(() => {
+    const results = searchDummy(q, type);
+    renderResults(results, q || ({person:'자연인',org:'기관·사업체',concept:'AI 에이전트',thing:'사물·기기'}[type]||type));
+  }, 150);
 }
 
 function setHint(text) {
@@ -966,7 +977,7 @@ function setHint(text) {
 /* ── 검색 ── */
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
-  if (!q) return;
+  if (!q && !currentFilter) return;
   showState('loading');
   try {
     const res = await fetch(`${PROXY}/users/search`, {
@@ -977,7 +988,8 @@ async function doSearch() {
     const data = await res.json();
     renderResults(data.results || data, q);
   } catch {
-    renderResults(getDummy(q), q);
+    // 프록시 미연결 시 더미 데이터로 폴백
+    renderResults(searchDummy(q, currentFilter), q);
   }
 }
 
@@ -1111,9 +1123,9 @@ async function sendMsg() {
     handleReply(reply, text);
   } catch {
     removeTyping();
-    const fallback = getDummy(text);
+    const fallback = searchDummy(text, currentFilter);
     if (fallback.length) {
-      appendMsg('ai', `"${text}" 검색 결과 ${fallback.length}건입니다.`);
+      appendMsg('ai', `"${text}" 검색 결과 ${fallback.length}건입니다. (로컬 더미 데이터)`);
       renderResultBubble(fallback);
     } else {
       appendMsg('ai', '검색 결과가 없습니다. 다른 검색어를 시도해 보세요.');
@@ -1218,18 +1230,342 @@ function toast(msg) {
   setTimeout(()=>el.classList.remove('show'),2600);
 }
 
-/* ── 더미 ── */
-function getDummy(q) {
-  const all=[
-    {permanent_guid:'pguid-001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0121',entity_type:'org',org_type:'주식회사',name:'할망국수',display_name:'할망국수',trust_level:'L2',occupation:'한식',services:['국수','고기국수'],bio:'3대째 이어온 제주 전통 고기국수.',sigungu:'제주시',dong:'이도이동',gdc_accepted:true,rating_avg:4.8,review_count:142},
-    {permanent_guid:'pguid-002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0222',entity_type:'org',org_type:'개인사업자',name:'해녀카페',display_name:'해녀카페',trust_level:'L2',occupation:'카페',services:['커피','말차'],sigungu:'제주시',gdc_accepted:true,rating_avg:4.6,review_count:89,nickname:'해녀카페'},
-    {permanent_guid:'pguid-005',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0513',entity_type:'org',org_type:'주식회사',name:'흑돼지명가',display_name:'흑돼지명가',trust_level:'L3',occupation:'한식',services:['흑돼지','오겹살'],sigungu:'제주시',gdc_accepted:true,rating_avg:4.9,review_count:201},
-    {permanent_guid:'pguid-007',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0722',entity_type:'org',org_type:'사단법인',name:'우도다이빙클럽',display_name:'우도다이빙클럽',trust_level:'L2',occupation:'레저',services:['다이빙','스노클링'],sigungu:'제주시',dong:'우도면',gdc_accepted:true,rating_avg:4.9,review_count:67},
-    {permanent_guid:'pguid-010',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0A00',entity_type:'concept',name:'K-Market AI',display_name:'K-Market AI',trust_level:'L0',occupation:'AI',sigungu:'제주시',gdc_accepted:false,rating_avg:0,review_count:0}
-  ];
-  const l=q.toLowerCase();
-  const r=all.filter(r=>r.name.toLowerCase().includes(l)||(r.services||[]).some(s=>s.includes(l))||(r.occupation||'').includes(l)||(r.sigungu||'').includes(q));
-  return r.length?r:all.slice(0,3);
+/* ══════════════════════════════════════════════════════
+   더미 데이터 — 30개 엔티티 (제주 파일럿)
+   entity_type: person / org / concept / thing
+══════════════════════════════════════════════════════ */
+const DUMMY_DB = [
+  /* ── 기관·사업체 (org) ── */
+  {permanent_guid:'pguid-001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0121',
+   entity_type:'org',org_type:'주식회사',name:'할망국수',display_name:'할망국수',
+   nickname:'할망국수',trust_level:'L2',occupation:'한식',
+   services:['국수','고기국수','만두','순대국'],
+   tags:['한식','국수','전통'],bio:'3대째 이어온 제주 전통 고기국수. 직접 끓인 돼지뼈 육수.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'이도이동',
+   lat:33.499,lng:126.531,gdc_accepted:true,rating_avg:4.8,review_count:142},
+
+  {permanent_guid:'pguid-002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0222',
+   entity_type:'org',org_type:'개인사업자',name:'해녀카페',display_name:'해녀카페',
+   nickname:'해녀카페',trust_level:'L2',occupation:'카페',
+   services:['아메리카노','라떼','제주말차','귤에이드','흑임자라떼'],
+   tags:['카페','말차','바다뷰'],bio:'해녀 출신 사장님이 운영하는 바다뷰 카페. 제주 말차 특산품.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'삼도이동',
+   lat:33.510,lng:126.519,gdc_accepted:true,rating_avg:4.6,review_count:89},
+
+  {permanent_guid:'pguid-003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0311',
+   entity_type:'org',org_type:'주식회사',name:'제주감귤마트',display_name:'제주감귤마트',
+   trust_level:'L1',occupation:'소매',
+   services:['한라봉','천혜향','감귤','레드향','황금향'],
+   tags:['감귤','과일','직거래'],bio:'제주도 직거래 감귤 전문 마트. 계절별 다양한 품종 취급.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'서귀동',
+   lat:33.246,lng:126.563,gdc_accepted:false,rating_avg:4.5,review_count:67},
+
+  {permanent_guid:'pguid-004',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0413',
+   entity_type:'org',org_type:'주식회사',name:'한라산스쿠터',display_name:'한라산스쿠터',
+   nickname:'한라스쿠터',trust_level:'L3',occupation:'렌탈',
+   services:['전동스쿠터','자전거','헬멧','전동킥보드'],
+   tags:['렌탈','스쿠터','투어'],bio:'한라산 둘레길 탐방 최적화 스쿠터 렌탈. GPS 포함.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
+   lat:33.450,lng:126.574,gdc_accepted:true,rating_avg:4.3,review_count:34},
+
+  {permanent_guid:'pguid-005',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0513',
+   entity_type:'org',org_type:'주식회사',name:'흑돼지명가',display_name:'흑돼지명가',
+   nickname:'흑돼지명가',trust_level:'L3',occupation:'한식',
+   services:['제주흑돼지','오겹살','항정살','흑돼지김치찌개'],
+   tags:['흑돼지','한식','직영'],bio:'제주 흑돼지 직영 농장 운영. GDC 결제 10% 할인.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'노형동',
+   lat:33.491,lng:126.488,gdc_accepted:true,rating_avg:4.9,review_count:201},
+
+  {permanent_guid:'pguid-006',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0622',
+   entity_type:'org',org_type:'주식회사',name:'제주일주투어',display_name:'제주일주투어',
+   trust_level:'L2',occupation:'관광',
+   services:['일주버스','오름투어','해안투어','승마','제주올레'],
+   tags:['투어','관광','버스'],bio:'제주 일주 코스 맞춤형 소그룹 투어. 한국어/영어 가이드.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'한림읍',
+   lat:33.405,lng:126.266,gdc_accepted:true,rating_avg:4.6,review_count:56},
+
+  {permanent_guid:'pguid-007',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0722',
+   entity_type:'org',org_type:'사단법인',name:'우도다이빙클럽',display_name:'우도다이빙클럽',
+   nickname:'우도다이빙',trust_level:'L2',occupation:'레저',
+   services:['스쿠버다이빙','스노클링','체험다이빙','수중사진'],
+   tags:['다이빙','레저','우도'],bio:'우도 앞바다 전문 다이빙 클럽. 초보자 체험 과정 운영.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'우도면',
+   lat:33.508,lng:126.952,gdc_accepted:true,rating_avg:4.9,review_count:67},
+
+  {permanent_guid:'pguid-008',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0811',
+   entity_type:'org',org_type:'개인사업자',name:'모슬포해산물',display_name:'모슬포해산물',
+   trust_level:'L1',occupation:'해산물',
+   services:['갈치','옥돔','해산물','활어','전복'],
+   tags:['해산물','수산','직판'],bio:'모슬포항 직판 신선 해산물. 택배 가능.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'대정읍',
+   lat:33.239,lng:126.241,gdc_accepted:false,rating_avg:4.7,review_count:134},
+
+  {permanent_guid:'pguid-009',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0922',
+   entity_type:'org',org_type:'주식회사',name:'오름펜션',display_name:'오름펜션',
+   trust_level:'L2',occupation:'숙박',
+   services:['펜션','객실','조식','별자리관측','BBQ'],
+   tags:['숙박','펜션','오름'],bio:'한라산 오름 인근 감성 펜션. 별자리 관측 프로그램.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'남원읍',
+   lat:33.290,lng:126.714,gdc_accepted:true,rating_avg:4.7,review_count:112},
+
+  {permanent_guid:'pguid-011',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0B22',
+   entity_type:'org',org_type:'주식회사',name:'제주짜장관',display_name:'제주짜장관',
+   trust_level:'L2',occupation:'중식',
+   services:['짜장면','짬뽕','탕수육','볶음밥','군만두'],
+   tags:['중식','짜장면','배달'],bio:'제주산 흑돼지 고명 짜장면. 배달 가능.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
+   lat:33.488,lng:126.491,gdc_accepted:true,rating_avg:4.4,review_count:78},
+
+  {permanent_guid:'pguid-012',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0C11',
+   entity_type:'org',org_type:'개인사업자',name:'오메기베이커리',display_name:'오메기베이커리',
+   trust_level:'L1',occupation:'베이커리',
+   services:['오메기떡','쑥떡','메밀빵','크루아상','제주소금빵'],
+   tags:['베이커리','떡','전통'],bio:'제주 전통 오메기떡과 현대적 베이커리의 조화.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'삼양동',
+   lat:33.521,lng:126.548,gdc_accepted:false,rating_avg:4.5,review_count:88},
+
+  {permanent_guid:'pguid-013',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:0D22',
+   entity_type:'org',org_type:'주식회사',name:'제주한치초밥',display_name:'제주한치초밥',
+   trust_level:'L2',occupation:'일식',
+   services:['한치초밥','성게덮밥','회','새우튀김롤','참치'],
+   tags:['일식','초밥','한치'],bio:'우도 해녀가 직접 잡은 한치로 만든 초밥 전문점.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'중문동',
+   lat:33.251,lng:126.412,gdc_accepted:true,rating_avg:4.8,review_count:93},
+
+  /* ── 자연인 (person) ── */
+  {permanent_guid:'pguid-p001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1111',
+   entity_type:'person',name:'홍길동',display_name:'홍길동',
+   nickname:'길동이',trust_level:'L1',occupation:'농업',
+   services:[],tags:['농업','제주'],bio:'제주 한림읍에서 감귤 농사를 짓는 농부.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'한림읍',
+   lat:33.413,lng:126.268,gdc_accepted:false,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-p002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:1211',
+   entity_type:'person',name:'홍길동',display_name:'홍길동',
+   trust_level:'L2',occupation:'어업',
+   services:[],tags:['어업','서귀포'],bio:'서귀포 대정읍 어부. 갈치·옥돔 전문.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'대정읍',
+   lat:33.237,lng:126.239,gdc_accepted:true,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-p003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1311',
+   entity_type:'person',name:'김제주',display_name:'김제주',
+   nickname:'제주토박이',trust_level:'L2',occupation:'관광가이드',
+   services:['오름투어','올레길안내','제주역사해설'],
+   tags:['가이드','관광'],bio:'제주 토박이 관광 가이드. 오름·올레길 전문.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'이도이동',
+   lat:33.501,lng:126.528,gdc_accepted:true,rating_avg:4.9,review_count:34},
+
+  {permanent_guid:'pguid-p004',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:1411',
+   entity_type:'person',name:'이해녀',display_name:'이해녀',
+   nickname:'해녀할머니',trust_level:'L3',occupation:'해녀',
+   services:['전복','소라','성게','해산물채취'],
+   tags:['해녀','전통','서귀포'],bio:'40년 경력 해녀. 우도 앞바다 전통 물질.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'성산읍',
+   lat:33.387,lng:126.872,gdc_accepted:true,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-p005',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1511',
+   entity_type:'person',name:'박변호사',display_name:'박변호사',
+   nickname:'제주법률',trust_level:'L3',occupation:'법률',
+   services:['부동산법률상담','기업법무','민사소송'],
+   tags:['법률','변호사'],bio:'제주지방법원 전문 변호사. 부동산·기업 전문.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'일도이동',
+   lat:33.511,lng:126.522,gdc_accepted:false,rating_avg:4.7,review_count:22},
+
+  {permanent_guid:'pguid-p006',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:1611',
+   entity_type:'person',name:'최의사',display_name:'최의사',
+   trust_level:'L3',occupation:'의료',
+   services:['내과진료','건강상담','처방'],
+   tags:['의료','내과'],bio:'제주 내과 전문의. 만성질환 관리 전문.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'노형동',
+   lat:33.489,lng:126.487,gdc_accepted:false,rating_avg:4.8,review_count:11},
+
+  /* ── AI 에이전트 (concept) ── */
+  {permanent_guid:'pguid-010',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0A00',
+   entity_type:'concept',name:'K-Market AI',display_name:'K-Market AI',
+   nickname:'마켓AI',trust_level:'L0',occupation:'AI',
+   services:['상품추천','가격비교','배달중개','재고조회'],
+   tags:['AI','추천','검색'],bio:'Gopang K-Market 지역 AI 추천 에이전트.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
+   lat:33.488,lng:126.491,gdc_accepted:false,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-ai002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0B00',
+   entity_type:'concept',name:'K-Law AI',display_name:'K-Law AI',
+   nickname:'법률AI',trust_level:'L1',occupation:'AI',
+   services:['법률상담','판례검색','계약서검토','법령해석'],
+   tags:['AI','법률','상담'],bio:'Gopang K-Law 법률 AI 에이전트. 제주 지역 법률 특화.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'일도이동',
+   lat:33.511,lng:126.522,gdc_accepted:false,rating_avg:4.2,review_count:45},
+
+  {permanent_guid:'pguid-ai003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0C00',
+   entity_type:'concept',name:'K-Health AI',display_name:'K-Health AI',
+   nickname:'건강AI',trust_level:'L1',occupation:'AI',
+   services:['건강상담','증상분석','병원추천','약품정보'],
+   tags:['AI','건강','의료'],bio:'Gopang K-Health 의료 AI 에이전트. 1차 건강 상담.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
+   lat:33.452,lng:126.575,gdc_accepted:false,rating_avg:4.0,review_count:33},
+
+  {permanent_guid:'pguid-ai004',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:0D00',
+   entity_type:'concept',name:'Users AI',display_name:'Users AI',
+   nickname:'유저AI',trust_level:'L0',occupation:'AI',
+   services:['엔티티검색','연결중개','닉네임해석','IPv6조회'],
+   tags:['AI','검색','연결'],bio:'Gopang Users 엔티티 검색·연결 AI 에이전트.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
+   lat:33.488,lng:126.491,gdc_accepted:false,rating_avg:0,review_count:0},
+
+  /* ── 사물·기기 (thing) ── */
+  {permanent_guid:'pguid-t001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:E001',
+   entity_type:'thing',name:'제주공항 스마트게이트 #1',display_name:'제주공항 스마트게이트 #1',
+   trust_level:'L2',occupation:'공항시설',
+   services:['탑승권인식','여권스캔','생체인증'],
+   tags:['공항','스마트게이트','IoT'],bio:'제주국제공항 1번 스마트 출국 게이트.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'용담이동',
+   lat:33.511,lng:126.493,gdc_accepted:false,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-t002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:E002',
+   entity_type:'thing',name:'한라산 기상관측소',display_name:'한라산 기상관측소',
+   trust_level:'L3',occupation:'기상관측',
+   services:['기온','풍속','강수량','일조량','실시간기상'],
+   tags:['기상','IoT','관측'],bio:'한라산 정상 1950m 기상관측 IoT 기기.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
+   lat:33.361,lng:126.529,gdc_accepted:false,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-t003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F020:E003',
+   entity_type:'thing',name:'성산일출봉 입장 단말기',display_name:'성산일출봉 입장 단말기',
+   trust_level:'L2',occupation:'관광시설',
+   services:['입장권발권','GDC결제','관람객통계'],
+   tags:['관광','IoT','GDC'],bio:'성산일출봉 GDC 결제 지원 스마트 입장 단말기.',
+   sido:'제주특별자치도',sigungu:'서귀포시',dong:'성산읍',
+   lat:33.459,lng:126.942,gdc_accepted:true,rating_avg:0,review_count:0},
+
+  /* ── 공공기관 (org/공공기관) ── */
+  {permanent_guid:'pguid-pub001',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:F001',
+   entity_type:'org',org_type:'공공기관',name:'제주특별자치도청',display_name:'제주특별자치도청',
+   nickname:'제주도청',trust_level:'L3',occupation:'행정',
+   services:['민원접수','행정서비스','복지신청','인허가'],
+   tags:['행정','공공','민원'],bio:'제주특별자치도 도정 행정 서비스.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'연동',
+   lat:33.489,lng:126.498,gdc_accepted:false,rating_avg:0,review_count:0},
+
+  {permanent_guid:'pguid-pub002',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:F002',
+   entity_type:'org',org_type:'공공기관',name:'제주관광공사',display_name:'제주관광공사',
+   nickname:'제주관광',trust_level:'L3',occupation:'관광행정',
+   services:['관광안내','투어패키지','관광지정보','축제안내'],
+   tags:['관광','공공','제주'],bio:'제주 관광 진흥 공기업. 제주 여행 공식 안내.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'삼도이동',
+   lat:33.508,lng:126.520,gdc_accepted:false,rating_avg:4.1,review_count:28},
+
+  {permanent_guid:'pguid-pub003',current_ipv6:'fd6f:7068:6173:6000:0082:5000:F010:F003',
+   entity_type:'org',org_type:'재단법인',name:'제주연구원',display_name:'제주연구원',
+   trust_level:'L2',occupation:'연구',
+   services:['정책연구','지역개발연구','환경연구'],
+   tags:['연구','재단','정책'],bio:'제주 지역 정책·환경·개발 전문 연구기관.',
+   sido:'제주특별자치도',sigungu:'제주시',dong:'아라동',
+   lat:33.448,lng:126.572,gdc_accepted:false,rating_avg:0,review_count:0},
+];
+
+/* ── 품목 동의어 테이블 ── */
+const SYNONYMS = {
+  '짜장면':['짜장면','자장면','중식','짜장','차이니즈'],
+  '자장면':['짜장면','자장면','중식'],
+  '커피':['커피','아메리카노','카페','라떼','에스프레소'],
+  '카페':['카페','커피','라떼','아메리카노'],
+  '치킨':['치킨','닭','후라이드','양념','통닭'],
+  '흑돼지':['흑돼지','삼겹살','오겹살','돼지','항정살'],
+  '삼겹살':['삼겹살','흑돼지','오겹살','돼지고기'],
+  '다이빙':['다이빙','스쿠버','스노클링','수중'],
+  '스쿠버':['스쿠버','다이빙','스노클링'],
+  '감귤':['감귤','한라봉','천혜향','귤','레드향'],
+  '한식':['한식','국수','밥','찌개','구이'],
+  '숙박':['숙박','펜션','호텔','민박','게스트하우스'],
+  '투어':['투어','관광','여행','가이드','트레킹'],
+  '해산물':['해산물','수산','생선','조개','새우','전복'],
+  '의료':['의료','의사','병원','진료','건강'],
+  '법률':['법률','변호사','상담','소송','법무'],
+  'AI':['AI','인공지능','에이전트','챗봇','어시스턴트'],
+};
+
+/* ── 스마트 검색 엔진 ── */
+function getDummy(q, filterType) {
+  if (!q && !filterType) return DUMMY_DB.slice(0, 10);
+  const lower = (q||'').toLowerCase().trim();
+
+  // 동의어 확장
+  let keywords = [lower];
+  for (const [key, syns] of Object.entries(SYNONYMS)) {
+    if (syns.some(s => lower.includes(s) || s.includes(lower))) {
+      keywords = [...new Set([...keywords, ...syns])];
+    }
+  }
+
+  // 닉네임 @ 검색
+  const isNick = lower.startsWith('@');
+  const nickQ  = isNick ? lower.slice(1) : null;
+
+  const scored = DUMMY_DB
+    .filter(r => !filterType || r.entity_type === filterType)
+    .map(r => {
+      let score = 0;
+      const rname  = (r.name||'').toLowerCase();
+      const rnick  = (r.nickname||'').toLowerCase();
+      const rbio   = (r.bio||'').toLowerCase();
+      const rocc   = (r.occupation||'').toLowerCase();
+      const rsido  = (r.sido||'').toLowerCase();
+      const rsigun = (r.sigungu||'').toLowerCase();
+      const rdong  = (r.dong||'').toLowerCase();
+      const rtags  = (r.tags||[]).map(t=>t.toLowerCase());
+      const rsvc   = (r.services||[]).map(s=>s.toLowerCase());
+
+      if (!lower && filterType) return { r, score: r.rating_avg||0 };
+
+      // 닉네임 정확 매칭 (최고 우선순위)
+      if (nickQ && rnick === nickQ) score += 100;
+      if (nickQ && rnick.includes(nickQ)) score += 60;
+
+      // 이름 정확 매칭
+      if (rname === lower) score += 80;
+      if (rname.includes(lower)) score += 40;
+
+      // 서비스 정확 매칭
+      keywords.forEach(kw => {
+        if (rsvc.some(s => s === kw)) score += 30;
+        if (rsvc.some(s => s.includes(kw) || kw.includes(s))) score += 15;
+      });
+
+      // 업종 매칭
+      keywords.forEach(kw => {
+        if (rocc === kw) score += 25;
+        if (rocc.includes(kw)) score += 12;
+      });
+
+      // 태그 매칭
+      keywords.forEach(kw => {
+        if (rtags.some(t => t === kw)) score += 20;
+        if (rtags.some(t => t.includes(kw) || kw.includes(t))) score += 8;
+      });
+
+      // 위치 매칭
+      keywords.forEach(kw => {
+        if (rsigun.includes(kw) || kw.includes(rsigun)) score += 15;
+        if (rdong.includes(kw) || kw.includes(rdong)) score += 10;
+        if (rsido.includes(kw)) score += 5;
+      });
+
+      // 소개문 포함
+      if (lower && rbio.includes(lower)) score += 8;
+      keywords.forEach(kw => { if (kw && rbio.includes(kw)) score += 4; });
+
+      return { r, score };
+    })
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || (b.r.rating_avg||0) - (a.r.rating_avg||0))
+    .map(x => x.r);
+
+  return scored.length ? scored : (filterType ? DUMMY_DB.filter(r=>r.entity_type===filterType).slice(0,5) : []);
+}
+
+/* ── 더미 검색 진입점 (doSearch에서 호출) ── */
+function searchDummy(q, filterType) {
+  return getDummy(q, filterType);
 }
 </script>
 <script src="https://gopang.net/subsystem-auth.js" onerror="console.warn('auth skip')"></script>
