@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>고팡 한림읍 사업체 등록</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;font-size:14px;background:#f8f9fa;color:#1a1a1a;-webkit-font-smoothing:antialiased}
+:root{
+  --green:#3ecf8e;--green-dk:#26a87c;--green-bg:#eefdf5;--green-bd:#c1f0da;
+  --border:#e5e7eb;--txt2:#4b5563;--txt3:#9ca3af;--red:#ef4444;
+}
+/* ── 헤더 ── */
+.header{background:#fff;border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{width:28px;height:28px;border-radius:7px;background:var(--green);display:flex;align-items:center;justify-content:center}
+.logo svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.header-title{font-size:15px;font-weight:700;color:#1a1a1a}
+.header-sub{font-size:11px;color:var(--txt3);margin-top:1px}
+.step-bar{margin-left:auto;display:flex;gap:6px;align-items:center}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .2s}
+.step-dot.done{background:var(--green)}
+.step-dot.active{background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}
+
+/* ── 메인 ── */
+.main{max-width:540px;margin:0 auto;padding:24px 16px 80px}
+
+/* ── 스텝 패널 ── */
+.step-panel{display:none}
+.step-panel.active{display:block}
+
+/* ── 섹션 카드 ── */
+.card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--green)}
+
+/* ── 폼 요소 ── */
+.field{margin-bottom:14px}
+.field-label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:5px}
+.field-label .req{color:var(--red);margin-left:2px}
+.field-input{
+  width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:5px;
+  font-size:13px;font-family:'Inter',sans-serif;color:#1a1a1a;outline:none;
+  transition:border-color .14s,background .14s;background:#fff;
+}
+.field-input:focus{border-color:#9ca3af;background:#fff}
+.field-input.err{border-color:var(--red);background:#fff5f5}
+.field-hint{font-size:11px;color:var(--txt3);margin-top:4px}
+.field-err{font-size:11px;color:var(--red);margin-top:4px;display:none}
+.field-input.err + .field-err{display:block}
+select.field-input{cursor:pointer}
+textarea.field-input{resize:none;line-height:1.5}
+
+/* ── 체크박스 그룹 ── */
+.check-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+.check-item{display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--border);border-radius:5px;cursor:pointer;transition:border-color .12s,background .12s;font-size:12px;font-weight:500;color:var(--txt2)}
+.check-item:hover{border-color:#9ca3af;background:var(--green-bg)}
+.check-item input{display:none}
+.check-item.checked{border-color:var(--green);background:var(--green-bg);color:var(--green-dk)}
+.check-box{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.check-item.checked .check-box{background:var(--green);border-color:var(--green)}
+.check-item.checked .check-box::after{content:'✓';font-size:9px;color:#fff;font-weight:700}
+
+/* ── 토글 스위치 ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0}
+.toggle-label{font-size:13px;color:#1a1a1a}
+.toggle-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;border-radius:11px;background:var(--border);cursor:pointer;transition:background .2s}
+.toggle input:checked + .toggle-slider{background:var(--green)}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked + .toggle-slider::before{transform:translateX(18px)}
+
+/* ── 주소 검색 ── */
+.addr-row{display:flex;gap:8px}
+.addr-row .field-input{flex:1}
+.addr-btn{padding:9px 14px;border-radius:5px;font-size:13px;font-weight:500;border:1px solid var(--border);background:#fff;color:var(--txt2);cursor:pointer;white-space:nowrap;transition:all .12s;flex-shrink:0}
+.addr-btn:hover{border-color:#9ca3af;background:var(--border)}
+
+/* ── 미리보기 카드 ── */
+.preview-card{background:var(--green-bg);border:1px solid var(--green-bd);border-radius:8px;padding:16px;margin-bottom:16px}
+.preview-name{font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:4px}
+.preview-handle{font-size:12px;font-family:monospace;color:var(--txt3);margin-bottom:12px}
+.preview-row{display:flex;gap:8px;font-size:12px;color:var(--txt2);margin-bottom:6px;align-items:flex-start}
+.preview-label{color:var(--txt3);flex-shrink:0;width:60px}
+.preview-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;margin-right:4px}
+.b-gdc{background:var(--green-bg);color:var(--green-dk);border:1px solid var(--green-bd)}
+.b-L0{background:#f1f5f9;color:#64748b}
+
+/* ── QR 코드 영역 ── */
+.qr-area{text-align:center;padding:24px;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:16px}
+.qr-placeholder{width:160px;height:160px;margin:0 auto 12px;background:var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--txt3)}
+.qr-url{font-size:11px;font-family:monospace;color:var(--txt3);word-break:break-all}
+
+/* ── 버튼 ── */
+.btn-row{display:flex;gap:8px;margin-top:8px}
+.btn{flex:1;padding:11px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .15s;text-align:center}
+.btn-primary{background:var(--green);color:#fff}
+.btn-primary:hover{background:var(--green-dk)}
+.btn-primary:disabled{background:var(--green-bd);cursor:not-allowed}
+.btn-outline{background:#fff;color:var(--txt2);border:1px solid var(--border)}
+.btn-outline:hover{border-color:#9ca3af;background:var(--border)}
+
+/* ── 스텝 타이틀 ── */
+.step-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.step-desc{font-size:13px;color:var(--txt2);margin-bottom:20px}
+
+/* ── 완료 화면 ── */
+.done-icon{width:56px;height:56px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-bd);display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.done-icon svg{width:28px;height:28px;fill:none;stroke:var(--green);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── 알림 박스 ── */
+.alert{padding:12px 14px;border-radius:6px;font-size:12px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.alert-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.alert svg{width:14px;height:14px;flex-shrink:0;margin-top:1px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+
+/* ── Combobox ── */
+.combo-wrap{position:relative}
+.combo-input{
+  width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:5px;
+  font-size:13px;font-family:'Inter',sans-serif;color:#1a1a1a;outline:none;
+  transition:border-color .14s;background:#fff;
+}
+.combo-input:focus{border-color:#9ca3af}
+.combo-input.err{border-color:var(--red);background:#fff5f5}
+.combo-dropdown{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:#fff;border:1px solid var(--border);border-radius:6px;
+  box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:200;
+  max-height:220px;overflow-y:auto;display:none;
+}
+.combo-dropdown.open{display:block}
+.combo-item{
+  padding:9px 12px;font-size:13px;color:var(--txt2);cursor:pointer;
+  transition:background .1s;border-bottom:1px solid #f3f4f6;
+}
+.combo-item:last-child{border-bottom:none}
+.combo-item:hover,.combo-item.selected{background:var(--green-bg);color:var(--green-dk)}
+.combo-item mark{background:none;color:var(--green-dk);font-weight:700}
+.combo-empty{padding:10px 12px;font-size:12px;color:var(--txt3);text-align:center}
+/* ── 스피너 ── */
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-right:6px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="header">
+  <div class="logo"><svg viewBox="0 0 16 16"><polyline points="3,8 7,12 13,4"/></svg></div>
+  <div>
+    <div class="header-title">고팡 사업체 등록</div>
+    <div class="header-sub">한림읍 OpenHash L1 파일럿</div>
+  </div>
+  <div class="step-bar">
+    <div class="step-dot active" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+    <div class="step-dot" id="dot-4"></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ══ STEP 1: 기본 정보 ══ -->
+  <div class="step-panel active" id="step-1">
+    <div class="step-title">사업체 기본 정보</div>
+    <div class="step-desc">한림읍 OpenHash 네트워크에 등록할 사업체 정보를 입력해주세요.</div>
+
+    <div class="alert alert-info">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div>등록 즉시 <strong>users.gopang.net</strong>에서 검색 가능합니다. 개인정보는 PDV에 암호화 저장되며 본인 동의 없이 외부 제공되지 않습니다.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        사업체 정보
+      </div>
+
+      <div class="field">
+        <label class="field-label">상호명 <span class="req">*</span></label>
+        <input class="field-input" id="f-name" type="text" placeholder="예: 보영반점" maxlength="40">
+        <div class="field-err">상호명을 입력해주세요.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">업종 <span class="req">*</span></label>
+        <div class="combo-wrap">
+          <input class="combo-input" id="f-occ" type="text" placeholder="업종 입력 또는 선택 (예: 음식점, 카페)"
+            autocomplete="off" oninput="comboFilter('f-occ')" onfocus="comboOpen('f-occ')" onblur="comboBlur('f-occ')">
+          <div class="combo-dropdown" id="f-occ-dd"></div>
+        </div>
+        <div class="field-err" id="f-occ-err">업종을 입력해주세요.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">제공 서비스·메뉴 <span class="req">*</span></label>
+        <input class="field-input" id="f-services" type="text" placeholder="예: 짜장면, 짬뽕, 탕수육 (쉼표로 구분)">
+        <div class="field-hint">검색어로 활용됩니다. 주요 메뉴·서비스를 입력해주세요.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        위치 정보
+      </div>
+
+      <div class="field">
+        <label class="field-label">주소 <span class="req">*</span></label>
+        <div class="combo-wrap">
+          <input class="combo-input" id="f-addr" type="text" placeholder="제주시 한림읍 ○○로 00 (법정리 선택 시 자동 입력)"
+            autocomplete="off" oninput="comboFilter('f-addr')" onfocus="comboOpen('f-addr')" onblur="comboBlur('f-addr')">
+          <div class="combo-dropdown" id="f-addr-dd"></div>
+        </div>
+        <div class="field-hint">법정리를 먼저 선택하면 주소가 자동 입력됩니다.</div>
+        <div class="field-err" id="f-addr-err">주소를 입력해주세요.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">법정리</label>
+        <div class="combo-wrap">
+          <input class="combo-input" id="f-ri" type="text" placeholder="법정리 입력 또는 선택 (예: 금능리, 협재리)"
+            autocomplete="off" oninput="comboFilter('f-ri')" onfocus="comboOpen('f-ri')" onblur="comboBlur('f-ri')">
+          <div class="combo-dropdown" id="f-ri-dd"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="nextStep(1)">다음 단계 →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 2: 상세 정보 ══ -->
+  <div class="step-panel" id="step-2">
+    <div class="step-title">상세 정보 설정</div>
+    <div class="step-desc">영업 정보와 결제 방식을 설정해주세요.</div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        영업 정보
+      </div>
+
+      <div class="field">
+        <label class="field-label">영업시간</label>
+        <input class="field-input" id="f-hours" type="text" placeholder="예: 11:00~21:00 (월~토), 일요일 휴무">
+      </div>
+
+      <div class="field">
+        <label class="field-label">전화번호</label>
+        <input class="field-input" id="f-phone" type="tel" placeholder="064-000-0000">
+      </div>
+
+      <div class="field">
+        <label class="field-label">웹사이트 / SNS</label>
+        <input class="field-input" id="f-website" type="url" placeholder="https://...">
+      </div>
+
+      <div class="field">
+        <label class="field-label">소개글</label>
+        <textarea class="field-input" id="f-desc" rows="3" placeholder="사업체 소개를 간단히 입력해주세요."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        결제 설정
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">GDC 결제 수락</div>
+          <div class="toggle-sub">카드 수수료 2.5% → GDC 0.2%로 절감</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="f-gdc" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="alert alert-warn" style="margin-top:12px">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div>GDC(고팡 디지털 화폐)는 현금 병행 사용 가능합니다. 1,000원 = 1 GDC 고정 환율.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        공개 범위
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">검색 결과 노출</div>
+          <div class="toggle-sub">users.gopang.net 검색에서 이 사업체가 보입니다</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="f-public" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goStep(1)">← 이전</button>
+      <button class="btn btn-primary" onclick="nextStep(2)">다음 단계 →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 3: 확인 및 등록 ══ -->
+  <div class="step-panel" id="step-3">
+    <div class="step-title">등록 정보 확인</div>
+    <div class="step-desc">아래 내용을 확인하고 등록을 완료해주세요.</div>
+
+    <div class="preview-card" id="preview-area">
+      <!-- JS로 채움 -->
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        OpenHash L1 노드 등록
+      </div>
+      <div style="font-size:12px;color:var(--txt2);line-height:1.7">
+        등록 시 <strong>KR-JEJU-JEJU-HANLIM</strong> (한림읍 L1 노드)에 기록되며,<br>
+        고팡 전체 네트워크에서 검색 가능해집니다.<br>
+        <span style="color:var(--txt3)">Primary GUID와 PDV 페이지가 자동 생성됩니다.</span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goStep(2)">← 이전</button>
+      <button class="btn btn-primary" id="btn-submit" onclick="submitRegister()">등록 완료</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 4: 완료 ══ -->
+  <div class="step-panel" id="step-4">
+    <div style="text-align:center;padding:32px 0">
+      <div class="done-icon">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="step-title" style="margin-bottom:8px">등록 완료!</div>
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:24px" id="done-msg"></div>
+    </div>
+
+    <div class="card" id="qr-card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/></svg>
+        QR 코드 — 고객에게 보여주세요
+      </div>
+      <div class="qr-area">
+        <div id="qr-display" style="margin:0 auto 12px;width:160px;height:160px"></div>
+        <div class="qr-url" id="qr-url"></div>
+      </div>
+      <button class="btn btn-outline" onclick="downloadQR()" style="width:100%">QR 코드 저장</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        등록 정보
+      </div>
+      <div id="done-info" style="font-size:12px;color:var(--txt2);line-height:2"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="window.open('https://users.gopang.net','_blank')">검색으로 확인 ↗</button>
+      <button class="btn btn-primary" onclick="location.reload()">새 사업체 등록</button>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+
+// ══ Combobox 데이터 ══
+const COMBO_DATA = {
+  'f-occ': [
+    '음식점','카페','커피전문점','중식당','일식당','패스트푸드','분식',
+    '치킨','피자','햄버거','족발·보쌈','해산물','횟집','고깃집',
+    '숙박업','펜션','게스트하우스','호텔','모텔',
+    '관광','체험농장','승마','낚시',
+    '소매점','편의점','마트','슈퍼마켓',
+    '미용실','이발소','네일샵',
+    '약국','한의원','의원','병원','치과','안경원',
+    '세탁소','자동차정비','주유소','타이어',
+    '농업','농산물판매','감귤농원','밭작물',
+    '수산업','수산물판매','어업',
+    '축산업','목장','정육점',
+    '부동산','공인중개사',
+    '학원','교육','어학원','예체능',
+    '건설업','인테리어','조경',
+    '도소매','유통','물류',
+    '기타'
+  ],
+  'f-ri': [
+    '귀덕리','금능리','금악리','대림리','동명리','명월리',
+    '상대리','수원리','월령리','저지리','한림리','한수리','협재리','옹포리'
+  ],
+  'f-addr': [
+    '제주시 한림읍 귀덕리',
+    '제주시 한림읍 금능리',
+    '제주시 한림읍 금능남로',
+    '제주시 한림읍 금악리',
+    '제주시 한림읍 대림리',
+    '제주시 한림읍 동명리',
+    '제주시 한림읍 명월리',
+    '제주시 한림읍 상대리',
+    '제주시 한림읍 수원리',
+    '제주시 한림읍 월령리',
+    '제주시 한림읍 저지리',
+    '제주시 한림읍 한림리',
+    '제주시 한림읍 한림로',
+    '제주시 한림읍 한림상로',
+    '제주시 한림읍 한수리',
+    '제주시 한림읍 협재리',
+    '제주시 한림읍 협재해안로',
+    '제주시 한림읍 옹포리',
+    '제주시 한림읍 한림중앙로',
+  ]
+};
+
+let comboTimer = {};
+
+function highlight(text, q) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return text;
+  return text.slice(0,idx) + '<mark>' + text.slice(idx,idx+q.length) + '</mark>' + text.slice(idx+q.length);
+}
+
+function comboFilter(id) {
+  const input = document.getElementById(id);
+  const dd    = document.getElementById(id+'-dd');
+  const q     = input.value.trim();
+  const list  = COMBO_DATA[id] || [];
+
+  const filtered = q
+    ? list.filter(item => item.toLowerCase().includes(q.toLowerCase()))
+    : list;
+
+  if (!filtered.length) {
+    dd.innerHTML = '<div class="combo-empty">직접 입력 가능합니다</div>';
+  } else {
+    dd.innerHTML = filtered.map(item =>
+      `<div class="combo-item" onmousedown="comboSelect('${id}','${item.replace(/'/g,"\'")}')">
+        ${highlight(item, q)}
+      </div>`
+    ).join('');
+  }
+  dd.classList.add('open');
+
+  // 법정리 선택 시 주소 자동 연동
+  if (id === 'f-ri' && q) {
+    const addrInput = document.getElementById('f-addr');
+    if (!addrInput.value || addrInput.value.startsWith('제주시 한림읍')) {
+      // 아직 아무것도 안 쳤거나 한림읍 prefix면 자동 세팅
+    }
+  }
+}
+
+function comboOpen(id) {
+  const dd   = document.getElementById(id+'-dd');
+  const list = COMBO_DATA[id] || [];
+  const q    = document.getElementById(id).value.trim();
+  const filtered = q ? list.filter(i=>i.toLowerCase().includes(q.toLowerCase())) : list;
+  dd.innerHTML = filtered.map(item=>
+    `<div class="combo-item" onmousedown="comboSelect('${id}','${item.replace(/'/g,"\'")}')">
+      ${highlight(item, q)}
+    </div>`
+  ).join('') || '<div class="combo-empty">직접 입력 가능합니다</div>';
+  dd.classList.add('open');
+}
+
+function comboBlur(id) {
+  // mousedown이 먼저 실행되도록 살짝 지연
+  comboTimer[id] = setTimeout(()=>{
+    document.getElementById(id+'-dd').classList.remove('open');
+  }, 150);
+}
+
+function comboSelect(id, value) {
+  clearTimeout(comboTimer[id]);
+  const input = document.getElementById(id);
+  input.value = value;
+  input.classList.remove('err');
+  document.getElementById(id+'-dd').classList.remove('open');
+
+  // 법정리 선택 시 주소 자동 입력
+  if (id === 'f-ri') {
+    const addrInput = document.getElementById('f-addr');
+    addrInput.value = `제주시 한림읍 ${value} `;
+    addrInput.focus();
+    addrInput.setSelectionRange(addrInput.value.length, addrInput.value.length);
+  }
+}
+
+// 외부 클릭 시 닫기
+document.addEventListener('click', e => {
+  document.querySelectorAll('.combo-dropdown.open').forEach(dd => {
+    if (!dd.previousElementSibling?.contains(e.target)) {
+      dd.classList.remove('open');
+    }
+  });
+});
+
+const SB_URL = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
+const SB_H   = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+const L1     = 'KR-JEJU-JEJU-HANLIM';
+const WORKER = 'https://gopang-proxy.tensor-city.workers.dev';
+
+// ── SHA-256 ──
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── GUID 생성 ──
+function genGuid() {
+  return 'org-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+}
+
+// ── 단계 이동 ──
+function goStep(n) {
+  document.querySelectorAll('.step-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('step-'+n).classList.add('active');
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{
+    d.classList.remove('active','done');
+    if (i+1 < n) d.classList.add('done');
+    if (i+1 === n) d.classList.add('active');
+  });
+  window.scrollTo(0,0);
+}
+
+// ── 유효성 검사 ──
+function validate(step) {
+  let ok = true;
+  if (step===1) {
+    ['f-name','f-occ','f-addr','f-services'].forEach(id=>{
+      const el = document.getElementById(id);
+      if (!el.value.trim()) {
+        el.classList.add('err');
+        ok = false;
+      } else {
+        el.classList.remove('err');
+      }
+    });
+  }
+  return ok;
+}
+
+function nextStep(from) {
+  if (!validate(from)) return;
+  if (from===2) { buildPreview(); }
+  goStep(from+1);
+}
+
+// ── 미리보기 생성 ──
+function buildPreview() {
+  const name = document.getElementById('f-name').value;
+  const occ  = document.getElementById('f-occ').value;
+  const addr = document.getElementById('f-addr').value;
+  const svc  = document.getElementById('f-services').value;
+  const gdc  = document.getElementById('f-gdc').checked;
+  const pub  = document.getElementById('f-public').checked;
+  const ph   = document.getElementById('f-phone').value;
+  const hrs  = document.getElementById('f-hours').value;
+
+  document.getElementById('preview-area').innerHTML = `
+    <div class="preview-name">${name}</div>
+    <div class="preview-handle" id="preview-handle">handle 생성 중…</div>
+    <div class="preview-row"><span class="preview-label">업종</span><span>${occ}</span></div>
+    <div class="preview-row"><span class="preview-label">서비스</span><span>${svc}</span></div>
+    <div class="preview-row"><span class="preview-label">주소</span><span>${addr}</span></div>
+    ${ph?`<div class="preview-row"><span class="preview-label">전화</span><span>${ph}</span></div>`:''}
+    ${hrs?`<div class="preview-row"><span class="preview-label">영업</span><span>${hrs}</span></div>`:''}
+    <div class="preview-row" style="margin-top:8px"><span class="preview-label">GDC</span>
+      ${gdc?'<span class="preview-badge b-gdc">₮ GDC 결제 가능</span>':'<span style="color:var(--txt3)">미사용</span>'}
+    </div>
+    <div class="preview-row"><span class="preview-label">공개</span>
+      ${pub?'<span style="color:var(--green-dk)">검색 노출</span>':'<span style="color:var(--txt3)">비공개</span>'}
+    </div>
+  `;
+
+  // handle 생성
+  sha256('ko:'+name).then(h=>{
+    const tag = h.slice(0,4);
+    document.getElementById('preview-handle').textContent = `@${name}#${tag}`;
+  });
+}
+
+// ── 등록 처리 ──
+async function submitRegister() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>등록 중…';
+
+  const name    = document.getElementById('f-name').value.trim();
+  const occ     = document.getElementById('f-occ').value;
+  const svcRaw  = document.getElementById('f-services').value;
+  const addr    = document.getElementById('f-addr').value.trim();
+  const gdc     = document.getElementById('f-gdc').checked;
+  const pub     = document.getElementById('f-public').checked;
+  const ph      = document.getElementById('f-phone').value.trim();
+  const hrs     = document.getElementById('f-hours').value.trim();
+  const website = document.getElementById('f-website').value.trim();
+  const desc    = document.getElementById('f-desc').value.trim();
+
+  const services = svcRaw.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
+  const guid     = genGuid();
+  const nh_v2    = await sha256('ko:'+name);
+  const nh_v1    = await sha256(name);
+  const pguid    = guid;  // Phase 1: guid = primary_guid
+  const tag      = nh_v2.slice(0,4);
+  const handle   = `@${name}#${tag}`;
+  const ipv6     = `2601:db80:bd05:${Date.now().toString(16).slice(-4)}::${Math.random().toString(16).slice(2,6)}:0001`;
+
+  try {
+    // 1. users 삽입
+    await fetch(`${SB_URL}/rest/v1/users`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({guid,device_fp:'web-register-'+Date.now(),registered_at:new Date().toISOString(),
+        last_seen_at:new Date().toISOString(),gduda_registered:true,l1_propagated_at:new Date().toISOString()})});
+
+    // 2. user_profiles 삽입
+    await fetch(`${SB_URL}/rest/v1/user_profiles`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({guid,primary_guid:pguid,current_ipv6:ipv6,entity_type:'org',
+        name,occupation:occ,services,address:addr,is_public:pub,
+        l1_node:L1,l2_node:'KR-JEJU-JEJU',l3_node:'KR-JEJU',
+        website:website||null,
+        extra:{phone:ph||null,business_hours:hrs||null,description:desc||null,gdc_accepted:gdc},
+        updated_at:new Date().toISOString()})});
+
+    // 3. user_trust_levels
+    await fetch(`${SB_URL}/rest/v1/user_trust_levels`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({guid,trust_level:'L0'})});
+
+    // 4. user_gdc_settings
+    await fetch(`${SB_URL}/rest/v1/user_gdc_settings`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({guid,gdc_accepted:gdc})});
+
+    // 5. user_nicknames
+    await fetch(`${SB_URL}/rest/v1/user_nicknames`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({guid,nickname:name,nickname_hash:nh_v1,nickname_hash_v2:nh_v2,
+        lang_code:'ko',script:'Hang',handle,verified:false,status:'active'})});
+
+    // 6. nickname_cache
+    await fetch(`${SB_URL}/rest/v1/nickname_cache`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({nickname_hash:nh_v2,primary_guid:pguid,handle,
+        lang_code:'ko',script:'Hang',verified:false,
+        l1_node:L1,l2_node:'KR-JEJU-JEJU',l3_node:'KR-JEJU',
+        ttl:86400,updated_at:new Date().toISOString()})});
+
+    // 7. location_log (한림읍 기준 좌표)
+    const lat = 33.40 + (Math.random()*0.06 - 0.03);
+    const lng = 126.26 + (Math.random()*0.06 - 0.03);
+    await fetch(`${SB_URL}/rest/v1/location_log`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({user_guid:guid,lat:parseFloat(lat.toFixed(6)),lng:parseFloat(lng.toFixed(6)),
+        address:addr,recorded_at:new Date().toISOString()})});
+
+    // 8. seller_ratings 초기화
+    await fetch(`${SB_URL}/rest/v1/seller_ratings`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
+      body:JSON.stringify({seller_guid:guid,weighted_avg:0,review_count:0,total_volume:0})});
+
+    // ── 완료 화면 ──
+    showDone({name, handle, guid, occ, addr, gdc, pub});
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '등록 완료';
+    alert('등록 중 오류가 발생했습니다: ' + e.message);
+  }
+}
+
+function showDone({name, handle, guid, occ, addr, gdc, pub}) {
+  goStep(4);
+
+  document.getElementById('done-msg').innerHTML =
+    `<strong>${name}</strong>이(가) 한림읍 OpenHash L1 노드에 등록됐습니다.`;
+
+  const pdvUrl = `${WORKER}/pdv/page/${encodeURIComponent(guid)}`;
+  document.getElementById('qr-url').textContent = pdvUrl;
+
+  // QR 코드 생성
+  new QRCode(document.getElementById('qr-display'), {
+    text: pdvUrl, width:160, height:160,
+    colorDark:'#1a1a1a', colorLight:'#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  document.getElementById('done-info').innerHTML = `
+    <div><strong>상호명</strong>: ${name}</div>
+    <div><strong>handle</strong>: ${handle}</div>
+    <div><strong>GUID</strong>: <span style="font-family:monospace;font-size:11px">${guid}</span></div>
+    <div><strong>업종</strong>: ${occ}</div>
+    <div><strong>주소</strong>: ${addr}</div>
+    <div><strong>GDC</strong>: ${gdc ? '₮ 결제 가능' : '미사용'}</div>
+    <div><strong>신뢰등급</strong>: L0 (본인 인증 후 L1 상향 가능)</div>
+    <div><strong>L1 노드</strong>: KR-JEJU-JEJU-HANLIM</div>
+  `;
+}
+
+function downloadQR() {
+  const canvas = document.querySelector('#qr-display canvas');
+  if (!canvas) return alert('QR 코드를 먼저 생성해주세요.');
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'gopang-qr.png';
+  a.click();
+}
+</script>
+</body>
+</html>
