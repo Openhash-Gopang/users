@@ -1174,6 +1174,9 @@ function renderTable(results) {
           ${!isConnect ? `<button class="act-btn act-outline"
             onclick="event.stopPropagation();doConnect('${r.guid}','${r.name}','transact')">
             거래</button>` : ''}
+          <button class="act-btn act-outline"
+            onclick="event.stopPropagation();openPdv('${r.primary_guid||r.guid}')"
+            title="PDV 신원 페이지">PDV</button>
         </div>
       </td>
     </tr>`;
@@ -1183,6 +1186,13 @@ function renderTable(results) {
 function rowClick(guid) {
   const r = currentResults.find(x => x.guid === guid);
   if (r) doConnect(r.guid, r.name, r.entity_type);
+}
+
+/* ── PDV 페이지 열기 — Worker /pdv/page/ 경유 ── */
+function openPdv(primaryGuid) {
+  const WORKER = 'https://gopang-proxy.tensor-city.workers.dev';
+  window.open(`${WORKER}/pdv/page/${encodeURIComponent(primaryGuid)}`, '_blank',
+    'width=600,height=700,noopener');
 }
 
 /* ── 연결 / 거래 선택 → caller에게 postMessage 반환 ── */
