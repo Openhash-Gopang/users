@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<title>업체 프로필 — 고팡</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  height:100%;height:100dvh;overflow:hidden;
+  font-family:'Pretendard',-apple-system,'Helvetica Neue',sans-serif;
+  font-size:15px;background:#fff;color:#111;
+  -webkit-font-smoothing:antialiased;
+}
+:root{
+  --green:#16a34a;--green-lt:#dcfce7;--green-dk:#15803d;--green-bd:#86efac;
+  --border:#e5e7eb;--txt2:#6b7280;--txt3:#9ca3af;
+  --chip-bg:#f9fafb;--chip-border:#e5e7eb;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+
+/* ── 레이아웃 ── */
+.app{
+  display:flex;flex-direction:column;
+  height:100%;height:100dvh;
+  max-width:480px;margin:0 auto;
+  background:#fff;overflow:hidden;
+}
+
+/* ── topbar ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:calc(var(--safe-t)+10px) 16px 10px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.topbar-icon{
+  width:28px;height:28px;border-radius:7px;background:var(--green);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.topbar-icon svg{width:14px;height:14px;stroke:#fff;stroke-width:2.2;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.topbar-name{font-size:15px;font-weight:800;color:#111;letter-spacing:-.3px}
+.top-btn{
+  width:36px;height:36px;border-radius:50%;background:none;border:none;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:background .12s;flex-shrink:0;
+}
+.top-btn:hover{background:var(--chip-bg)}
+.top-btn svg{width:18px;height:18px;stroke:#6b7280;stroke-width:1.8;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* ── 스크롤 본문 ── */
+.profile-body{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+
+/* ── 업체 헤더 ── */
+.biz-header{
+  padding:16px 16px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--chip-bg);
+}
+.biz-name{font-size:18px;font-weight:800;color:#111;letter-spacing:-.4px;margin-bottom:4px}
+.biz-meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px}
+.biz-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:12px;font-weight:600;color:var(--txt2);
+}
+.biz-badge svg{width:12px;height:12px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0}
+.biz-badge.open{color:var(--green-dk)}
+.biz-rating{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;color:#b45309}
+.biz-address{font-size:12px;color:var(--txt3)}
+.biz-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.biz-tag{
+  display:inline-block;padding:3px 9px;border-radius:20px;
+  background:#fff;border:1px solid var(--border);
+  font-size:11px;font-weight:600;color:var(--txt2);
+}
+.biz-tag.gdc{background:var(--green-lt);border-color:var(--green-bd);color:var(--green-dk)}
+
+/* ── 탭 ── */
+.tab-bar{
+  display:flex;border-bottom:1px solid var(--border);
+  flex-shrink:0;background:#fff;
+  position:sticky;top:0;z-index:10;
+}
+.tab-item{
+  flex:1;padding:12px 0;text-align:center;
+  font-size:13px;font-weight:600;color:var(--txt3);
+  border:none;background:none;cursor:pointer;
+  border-bottom:2px solid transparent;transition:color .12s,border-color .12s;
+}
+.tab-item.active{color:var(--green-dk);border-bottom-color:var(--green)}
+
+/* ── 메뉴 탭 ── */
+.tab-content{display:none;padding:0 16px 12px}
+.tab-content.active{display:block}
+
+.menu-section-title{
+  font-size:11px;font-weight:700;color:var(--txt3);
+  letter-spacing:.5px;text-transform:uppercase;
+  padding:14px 0 8px;border-bottom:1px solid var(--border);
+  margin-bottom:4px;
+}
+.menu-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 0;border-bottom:1px solid var(--border);gap:12px;
+}
+.menu-item:last-child{border-bottom:none}
+.menu-info{flex:1;min-width:0}
+.menu-name{font-size:14px;font-weight:600;color:#111;margin-bottom:2px}
+.menu-price{font-size:13px;color:var(--txt2);font-weight:500}
+.menu-ctrl{display:flex;align-items:center;gap:0;flex-shrink:0}
+.qty-btn{
+  width:30px;height:30px;border-radius:50%;
+  border:1.5px solid var(--border);background:#fff;
+  color:#111;font-size:16px;font-weight:600;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:border-color .12s,background .12s;flex-shrink:0;
+}
+.qty-btn:hover{border-color:var(--green);background:var(--green-lt);color:var(--green-dk)}
+.qty-btn:disabled{opacity:.3;cursor:not-allowed}
+.qty-num{width:28px;text-align:center;font-size:14px;font-weight:700;color:#111}
+
+/* ── 정보 탭 ── */
+.info-row{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:12px 0;border-bottom:1px solid var(--border);
+}
+.info-row:last-child{border-bottom:none}
+.info-icon{
+  width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  margin-top:1px;
+}
+.info-icon svg{width:16px;height:16px;stroke:var(--txt3);stroke-width:1.8;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.info-key{font-size:12px;color:var(--txt3);width:52px;flex-shrink:0;padding-top:1px}
+.info-val{font-size:13px;color:#111;font-weight:500;line-height:1.5;flex:1}
+
+/* ── 리뷰 탭 ── */
+.review-item{padding:12px 0;border-bottom:1px solid var(--border)}
+.review-item:last-child{border-bottom:none}
+.review-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.review-star{font-size:12px;font-weight:700;color:#b45309}
+.review-date{font-size:11px;color:var(--txt3)}
+.review-text{font-size:13px;color:#374151;line-height:1.65}
+.review-empty{text-align:center;color:var(--txt3);font-size:13px;padding:28px 0}
+
+/* ── 주문 하단 바 ── */
+.order-bar{
+  flex-shrink:0;border-top:1px solid var(--border);
+  padding:12px 16px calc(12px + var(--safe-b));
+  background:#fff;
+  display:none;  /* 메뉴탭 + extra.menu 있을 때만 표시 */
+}
+.order-bar.show{display:block}
+.order-summary{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:10px;
+}
+.order-count{font-size:13px;color:var(--txt2)}
+.order-count strong{color:#111;font-weight:700}
+.order-total{font-size:16px;font-weight:800;color:#111;letter-spacing:-.3px}
+.order-total span{font-size:12px;font-weight:500;color:var(--txt3);margin-right:4px}
+.order-btn{
+  display:block;width:100%;padding:14px;border-radius:12px;
+  border:none;cursor:pointer;
+  font-family:'Pretendard',sans-serif;font-size:15px;font-weight:700;
+  background:var(--green);color:#fff;
+  transition:opacity .12s,transform .1s;-webkit-tap-highlight-color:transparent;
+}
+.order-btn:hover{opacity:.9}
+.order-btn:active{transform:scale(.98)}
+.order-btn:disabled{background:var(--green-bd);cursor:not-allowed;opacity:.7}
+
+/* ── 결제 시트 ── */
+.pay-overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(0,0,0,.45);
+  display:flex;align-items:flex-end;justify-content:center;
+  visibility:hidden;opacity:0;transition:opacity .2s,visibility .2s;
+}
+.pay-overlay.open{visibility:visible;opacity:1}
+.pay-sheet{
+  width:100%;max-width:480px;background:#fff;
+  border-radius:20px 20px 0 0;
+  padding:20px 20px calc(20px + var(--safe-b));
+  transform:translateY(100%);transition:transform .25s;
+}
+.pay-overlay.open .pay-sheet{transform:translateY(0)}
+.pay-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px}
+.pay-title{font-size:16px;font-weight:800;color:#111;margin-bottom:14px;letter-spacing:-.3px}
+.pay-rows{display:flex;flex-direction:column;gap:0;margin-bottom:14px}
+.pay-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 0;border-bottom:1px solid var(--border);
+}
+.pay-row:last-child{border-bottom:none}
+.pay-row-label{font-size:13px;color:var(--txt2)}
+.pay-row-val{font-size:13px;font-weight:600;color:#111}
+.pay-row-val.total{font-size:16px;font-weight:800;color:var(--green-dk)}
+.pay-note{font-size:11px;color:var(--txt3);text-align:center;margin-bottom:14px;line-height:1.6}
+.pay-confirm-btn{
+  display:block;width:100%;padding:14px;border-radius:12px;border:none;
+  font-family:'Pretendard',sans-serif;font-size:15px;font-weight:700;
+  background:var(--green);color:#fff;cursor:pointer;
+  transition:opacity .12s;margin-bottom:8px;
+}
+.pay-confirm-btn:hover{opacity:.9}
+.pay-confirm-btn:disabled{opacity:.6;cursor:not-allowed}
+.pay-cancel-btn{
+  display:block;width:100%;padding:12px;border-radius:12px;border:none;
+  font-family:'Pretendard',sans-serif;font-size:14px;font-weight:600;
+  background:var(--chip-bg);color:var(--txt2);cursor:pointer;
+  border:1px solid var(--border);
+}
+
+/* ── 완료 화면 ── */
+.done-screen{
+  position:fixed;inset:0;z-index:1000;background:#fff;
+  display:none;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:32px 24px calc(32px + var(--safe-b));text-align:center;
+}
+.done-screen.show{display:flex}
+.done-icon{
+  width:72px;height:72px;border-radius:50%;
+  background:var(--green-lt);border:2px solid var(--green-bd);
+  display:flex;align-items:center;justify-content:center;margin-bottom:20px;
+}
+.done-icon svg{width:32px;height:32px;stroke:var(--green-dk);stroke-width:2.2;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.done-title{font-size:20px;font-weight:800;color:#111;margin-bottom:8px;letter-spacing:-.4px}
+.done-sub{font-size:14px;color:var(--txt2);line-height:1.7;margin-bottom:24px}
+.done-detail{
+  width:100%;background:var(--chip-bg);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;margin-bottom:24px;text-align:left;
+}
+.done-detail-row{
+  display:flex;justify-content:space-between;
+  padding:5px 0;font-size:13px;color:var(--txt2);
+}
+.done-detail-row strong{color:#111;font-weight:600}
+.done-close-btn{
+  display:block;width:100%;padding:14px;border-radius:12px;border:none;
+  font-family:'Pretendard',sans-serif;font-size:15px;font-weight:700;
+  background:var(--green);color:#fff;cursor:pointer;
+}
+
+/* ── 로딩 / 에러 ── */
+.state-screen{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:40px 24px;text-align:center;color:var(--txt2);
+}
+.state-screen svg{
+  width:40px;height:40px;stroke:var(--txt3);stroke-width:1.5;fill:none;
+  margin-bottom:14px;display:block;
+}
+.state-screen p{font-size:14px;line-height:1.65}
+.spinner{
+  width:36px;height:36px;border-radius:50%;
+  border:3px solid var(--border);border-top-color:var(--green);
+  animation:spin .7s linear infinite;margin-bottom:14px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 토스트 ── */
+.toast{
+  position:fixed;bottom:calc(80px + var(--safe-b));left:50%;
+  transform:translateX(-50%) translateY(10px);
+  background:#111;color:#fff;border-radius:10px;
+  padding:10px 18px;font-size:13px;font-weight:500;
+  z-index:9999;opacity:0;transition:all .25s;white-space:nowrap;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ── topbar ── -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon" id="topbar-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+      </div>
+      <span class="topbar-name" id="topbar-name">불러오는 중…</span>
+    </div>
+    <button class="top-btn" onclick="closeWindow()" title="닫기">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- ── 본문 (로딩 중) ── -->
+  <div class="profile-body" id="profile-body">
+    <div class="state-screen" id="loading-screen">
+      <div class="spinner"></div>
+      <p>업체 정보를 불러오는 중입니다…</p>
+    </div>
+  </div>
+
+  <!-- ── 주문 하단 바 ── -->
+  <div class="order-bar" id="order-bar">
+    <div class="order-summary">
+      <span class="order-count">선택 <strong id="total-count">0</strong>개</span>
+      <span class="order-total"><span>합계</span><span id="total-price">₩0</span></span>
+    </div>
+    <button class="order-btn" id="order-btn" disabled onclick="openPaySheet()">주문하기</button>
+  </div>
+
+</div><!-- /.app -->
+
+<!-- ── 결제 확인 시트 ── -->
+<div class="pay-overlay" id="pay-overlay" onclick="if(event.target===this)closePaySheet()">
+  <div class="pay-sheet">
+    <div class="pay-handle"></div>
+    <div class="pay-title">주문 확인</div>
+    <div class="pay-rows" id="pay-rows"></div>
+    <p class="pay-note">고팡 앱에서 서명하시면 즉시 처리됩니다.<br>구매자 1회 서명으로 거래가 완결됩니다.</p>
+    <button class="pay-confirm-btn" id="pay-confirm-btn" onclick="requestSign()">
+      🔐 고팡으로 서명하여 결제
+    </button>
+    <button class="pay-cancel-btn" onclick="closePaySheet()">취소</button>
+  </div>
+</div>
+
+<!-- ── 완료 화면 ── -->
+<div class="done-screen" id="done-screen">
+  <div class="done-icon">
+    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+  <div class="done-title">주문 완료!</div>
+  <div class="done-sub" id="done-sub"></div>
+  <div class="done-detail" id="done-detail"></div>
+  <button class="done-close-btn" onclick="closeDone()">확인</button>
+</div>
+
+<!-- ── 토스트 ── -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   users/profile.html v1.0  — STEP 25 구현
+   범용 업체 프로필 + 메뉴 주문 + GWP 결제 연동
+   URL: /profile.html?handle=@geumneung
+        /profile.html?guid=dummy-hanlim-003
+        /profile.html?gwp=1&handle=@geumneung&ctx=...
+═══════════════════════════════════════════════════════ */
+
+const PROXY_BASE    = 'https://gopang-proxy.tensor-city.workers.dev';
+const GOPANG_ORIGIN = 'https://gopang.net';
+const L1_NODE       = 'KR-JEJU-JEJU-HANLIM';
+
+/* ── URL 파라미터 파싱 ── */
+const params  = new URLSearchParams(location.search);
+const handle  = params.get('handle') || '';
+const guidParam = params.get('guid') || '';
+const isGwp   = params.get('gwp') === '1';
+
+/* ── 상태 ── */
+let profileData = null;   // /biz/profile 응답
+let menuItems   = [];     // extra.menu 배열
+const qty       = {};     // 메뉴 수량
+
+/* ═══════════════════════════════════════════════════════
+   1. 업체 정보 로드
+═══════════════════════════════════════════════════════ */
+async function loadProfile() {
+  const identifier = handle || guidParam;
+  if (!identifier) {
+    showError('업체 정보가 없습니다.<br>올바른 URL로 접근해 주세요.');
+    return;
+  }
+
+  try {
+    let url;
+    if (handle) {
+      url = `${PROXY_BASE}/biz/profile/${encodeURIComponent(handle)}`;
+    } else {
+      // guid → user_profiles 직접 조회 경로 (폴백)
+      url = `${PROXY_BASE}/biz/profile/${encodeURIComponent(guidParam)}`;
+    }
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '프로필 없음');
+
+    profileData = data;
+    renderProfile(data);
+  } catch (e) {
+    console.error('[Profile]', e.message);
+    // Worker /biz/profile이 없는 경우 더미 폴백 (개발 단계)
+    if (handle === '@geumneung' || guidParam === 'dummy-hanlim-003') {
+      renderProfile(getDummyProfile());
+    } else {
+      showError('업체 정보를 불러올 수 없습니다.<br>' + e.message);
+    }
+  }
+}
+
+/* ── 더미 프로필 (개발·테스트용) ── */
+function getDummyProfile() {
+  return {
+    ok: true,
+    profile: {
+      primary_guid: 'dummy-hanlim-003',
+      current_ipv6: '2601:db80:bd05:0003::0003:0003',
+      name:         '금능반점',
+      entity_type:  'org',
+      occupation:   '중식',
+      address:      '제주시 한림읍 금능리 89',
+      handle:       '@geumneung',
+      extra: {
+        phone:          '064-796-0003',
+        gdc_accepted:   true,
+        business_hours: '11:00 – 20:00',
+        closed_days:    null,
+        menu: [
+          { id:'menu-001', name:'짜장면',     price:6000,  available:true },
+          { id:'menu-002', name:'짜장밥',     price:6000,  available:true },
+          { id:'menu-003', name:'간짜장',     price:7000,  available:true },
+          { id:'menu-004', name:'짬뽕',       price:7000,  available:true },
+          { id:'menu-005', name:'탕수육(소)', price:18000, available:true },
+          { id:'menu-006', name:'탕수육(대)', price:28000, available:true },
+        ],
+      },
+    },
+    products:       [],
+    reviews:        [],
+    review_summary: { count: 9, avg_rating: '4.50' },
+  };
+}
+
+/* ═══════════════════════════════════════════════════════
+   2. 프로필 렌더링
+═══════════════════════════════════════════════════════ */
+function renderProfile(data) {
+  const p   = data.profile;
+  const ex  = p.extra || {};
+  const rs  = data.review_summary || {};
+  const hasMenu = Array.isArray(ex.menu) && ex.menu.length > 0;
+
+  // topbar 업데이트
+  document.getElementById('topbar-name').textContent = p.name || '업체';
+
+  // 본문 구성
+  const body = document.getElementById('profile-body');
+  body.innerHTML = '';
+
+  // ── 업체 헤더 ──
+  const header = document.createElement('div');
+  header.className = 'biz-header';
+  header.innerHTML = `
+    <div class="biz-name">${esc(p.name)}</div>
+    <div class="biz-meta">
+      ${ex.business_hours ? `
+        <span class="biz-badge open">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          ${esc(ex.business_hours)}
+        </span>` : ''}
+      ${rs.avg_rating ? `<span class="biz-rating">★ ${rs.avg_rating}</span>` : ''}
+      ${rs.count ? `<span class="biz-badge">${rs.count}개 리뷰</span>` : ''}
+    </div>
+    <div class="biz-address">${esc(p.address || '')}</div>
+    <div class="biz-tags">
+      <span class="biz-tag">${esc(p.occupation || '')}</span>
+      ${ex.gdc_accepted ? '<span class="biz-tag gdc">GDC ✅</span>' : ''}
+      ${ex.closed_days  ? `<span class="biz-tag">휴무: ${esc(ex.closed_days)}</span>` : ''}
+    </div>`;
+  body.appendChild(header);
+
+  // ── 탭 바 ──
+  const tabBar = document.createElement('div');
+  tabBar.className = 'tab-bar';
+  tabBar.innerHTML = `
+    <button class="tab-item active" id="tab-menu" onclick="switchTab('menu')" ${!hasMenu ? 'style="display:none"' : ''}>메뉴</button>
+    <button class="tab-item ${!hasMenu ? 'active' : ''}" id="tab-info" onclick="switchTab('info')">정보</button>
+    <button class="tab-item" id="tab-review" onclick="switchTab('review')">리뷰 ${rs.count ? `(${rs.count})` : ''}</button>`;
+  body.appendChild(tabBar);
+
+  // ── 메뉴 탭 ──
+  const menuTab = document.createElement('div');
+  menuTab.className = `tab-content ${hasMenu ? 'active' : ''}`;
+  menuTab.id = 'content-menu';
+  if (hasMenu) {
+    menuItems = ex.menu;
+    menuItems.forEach(m => qty[m.id] = 0);
+    menuTab.innerHTML = `<div class="menu-section-title">메뉴</div>`;
+    menuItems.forEach(m => {
+      if (!m.available && m.available !== undefined) return; // 품절 제외
+      const item = document.createElement('div');
+      item.className = 'menu-item';
+      item.innerHTML = `
+        <div class="menu-info">
+          <div class="menu-name">${esc(m.name)}</div>
+          <div class="menu-price">₩${m.price.toLocaleString()}</div>
+        </div>
+        <div class="menu-ctrl">
+          <button class="qty-btn" id="btn-minus-${m.id}" onclick="changeQty('${m.id}',-1)" disabled>−</button>
+          <span class="qty-num" id="qty-${m.id}">0</span>
+          <button class="qty-btn" onclick="changeQty('${m.id}',1)">+</button>
+        </div>`;
+      menuTab.appendChild(item);
+    });
+  } else {
+    menuTab.innerHTML = '<p style="padding:20px 0;text-align:center;color:var(--txt3);font-size:13px">메뉴 정보가 없습니다.</p>';
+  }
+  body.appendChild(menuTab);
+
+  // ── 정보 탭 ──
+  const infoTab = document.createElement('div');
+  infoTab.className = `tab-content ${!hasMenu ? 'active' : ''}`;
+  infoTab.id = 'content-info';
+  infoTab.innerHTML = `
+    <div class="info-row">
+      <div class="info-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <span class="info-key">주소</span>
+      <span class="info-val">${esc(p.address || '—')}</span>
+    </div>
+    ${ex.phone ? `
+    <div class="info-row">
+      <div class="info-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.13 6.13l.95-.95a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
+      <span class="info-key">전화</span>
+      <span class="info-val"><a href="tel:${esc(ex.phone)}" style="color:var(--green-dk)">${esc(ex.phone)}</a></span>
+    </div>` : ''}
+    ${ex.business_hours ? `
+    <div class="info-row">
+      <div class="info-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <span class="info-key">영업</span>
+      <span class="info-val">${esc(ex.business_hours)}${ex.closed_days ? `<br><span style="color:var(--txt3);font-size:12px">휴무: ${esc(ex.closed_days)}</span>` : ''}</span>
+    </div>` : ''}
+    <div class="info-row">
+      <div class="info-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+      <span class="info-key">결제</span>
+      <span class="info-val">${ex.gdc_accepted ? 'GDC ✅ · 현금 · 카드' : '현금 · 카드'}</span>
+    </div>
+    <div class="info-row">
+      <div class="info-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      <span class="info-key">업종</span>
+      <span class="info-val">${esc(p.occupation || '—')}</span>
+    </div>`;
+  body.appendChild(infoTab);
+
+  // ── 리뷰 탭 ──
+  const reviewTab = document.createElement('div');
+  reviewTab.className = 'tab-content';
+  reviewTab.id = 'content-review';
+  const reviews = data.reviews || [];
+  if (reviews.length) {
+    reviews.forEach(r => {
+      const item = document.createElement('div');
+      item.className = 'review-item';
+      item.innerHTML = `
+        <div class="review-header">
+          <span class="review-star">★ ${r.rating || '—'}</span>
+          <span class="review-date">${(r.created_at || '').slice(0,10)}</span>
+        </div>
+        <div class="review-text">${esc(r.body || '')}</div>`;
+      reviewTab.appendChild(item);
+    });
+  } else {
+    reviewTab.innerHTML = '<div class="review-empty">아직 리뷰가 없습니다.</div>';
+  }
+  body.appendChild(reviewTab);
+
+  // 주문 하단 바 표시 (메뉴 있을 때만)
+  if (hasMenu) {
+    document.getElementById('order-bar').classList.add('show');
+  }
+}
+
+/* ── 탭 전환 ── */
+function switchTab(tab) {
+  ['menu','info','review'].forEach(t => {
+    document.getElementById(`tab-${t}`)?.classList.toggle('active', t === tab);
+    document.getElementById(`content-${t}`)?.classList.toggle('active', t === tab);
+  });
+  // 주문 바: 메뉴 탭 + 메뉴 있을 때만
+  const hasMenu = menuItems.length > 0;
+  document.getElementById('order-bar').classList.toggle('show', tab === 'menu' && hasMenu);
+}
+
+/* ═══════════════════════════════════════════════════════
+   3. 수량 조절 / 합계
+═══════════════════════════════════════════════════════ */
+function changeQty(id, delta) {
+  qty[id] = Math.max(0, qty[id] + delta);
+  const numEl  = document.getElementById(`qty-${id}`);
+  const minBtn = document.getElementById(`btn-minus-${id}`);
+  if (numEl)  numEl.textContent   = qty[id];
+  if (minBtn) minBtn.disabled     = qty[id] === 0;
+  updateSummary();
+}
+
+function updateSummary() {
+  let count = 0, total = 0;
+  menuItems.forEach(m => { count += qty[m.id]||0; total += (qty[m.id]||0) * m.price; });
+  document.getElementById('total-count').textContent = count;
+  document.getElementById('total-price').textContent = `₩${total.toLocaleString()}`;
+  document.getElementById('order-btn').disabled = count === 0;
+}
+
+/* ═══════════════════════════════════════════════════════
+   4. 결제 시트 / GWP_SIGN_REQUEST
+═══════════════════════════════════════════════════════ */
+function openPaySheet() {
+  const selected = menuItems.filter(m => qty[m.id] > 0);
+  if (!selected.length) return;
+
+  const rows = document.getElementById('pay-rows');
+  let total = 0;
+  rows.innerHTML = '';
+  selected.forEach(m => {
+    const sub = m.price * qty[m.id]; total += sub;
+    const row = document.createElement('div');
+    row.className = 'pay-row';
+    row.innerHTML = `
+      <span class="pay-row-label">${esc(m.name)} × ${qty[m.id]}</span>
+      <span class="pay-row-val">₩${sub.toLocaleString()}</span>`;
+    rows.appendChild(row);
+  });
+  const totalRow = document.createElement('div');
+  totalRow.className = 'pay-row';
+  totalRow.innerHTML = `
+    <span class="pay-row-label" style="font-weight:700;color:#111">합계</span>
+    <span class="pay-row-val total">₩${total.toLocaleString()}</span>`;
+  rows.appendChild(totalRow);
+
+  document.getElementById('pay-overlay').classList.add('open');
+}
+
+function closePaySheet() {
+  document.getElementById('pay-overlay').classList.remove('open');
+  resetPayBtn();
+}
+
+function requestSign() {
+  const p        = profileData?.profile || getDummyProfile().profile;
+  const selected = menuItems.filter(m => qty[m.id] > 0);
+  let total = 0;
+  const items = selected.map(m => {
+    total += m.price * qty[m.id];
+    return { id: m.id, name: m.name, price: m.price, quantity: qty[m.id] };
+  });
+
+  const tx = {
+    seller_guid:       p.primary_guid || p.current_ipv6,
+    seller_name:       p.name,
+    items,
+    total,
+    fs_account_buyer:  'pl-purchase',
+    fs_account_seller: 'pl-revenue',
+    currency:          'T',
+    l1_node:           L1_NODE,
+    memo:              `${p.name} 주문`,
+  };
+
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, GOPANG_ORIGIN);
+    const btn = document.getElementById('pay-confirm-btn');
+    btn.textContent = '⏳ 고팡 앱에서 서명 중…';
+    btn.disabled = true;
+    showToast('고팡 앱에서 서명해 주세요.');
+  } else {
+    // opener 없음 → 고팡 앱으로 리다이렉트 (T4 테스트)
+    const ctx = btoa(unescape(encodeURIComponent(
+      `${p.name} 주문: ${items.map(i=>`${i.name}×${i.quantity}`).join(', ')} 합계 ₩${total.toLocaleString()}`
+    )));
+    window.location.href = `https://gopang.net/?gwp=1&ctx=${ctx}&ctx_enc=b64`;
+  }
+}
+
+function resetPayBtn() {
+  const btn = document.getElementById('pay-confirm-btn');
+  if (!btn) return;
+  btn.textContent = '🔐 고팡으로 서명하여 결제';
+  btn.disabled = false;
+}
+
+/* ═══════════════════════════════════════════════════════
+   5. GWP_SIGN_RESPONSE 수신 → /biz/order POST
+═══════════════════════════════════════════════════════ */
+window.addEventListener('message', async (e) => {
+  if (e.origin !== GOPANG_ORIGIN) return;
+  const { type, tx, tx_hash, buyer_sig, buyer_public_key, from_guid } = e.data || {};
+
+  if (type === 'GWP_SIGN_RESPONSE') {
+    showToast('서명 완료. 결제 처리 중…');
+    try {
+      const p   = profileData?.profile || getDummyProfile().profile;
+      const res = await fetch(`${PROXY_BASE}/biz/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tx, tx_hash, buyer_sig, buyer_public_key,
+          from_guid,
+          seller_guid:  tx?.seller_guid,
+          item_name:    tx?.items?.[0]?.name || '주문',
+          quantity:     tx?.items?.reduce((s,i) => s + i.quantity, 0) || 1,
+          memo:         tx?.memo,
+          l1_node:      L1_NODE,
+          reporter_svc: 'kmarket',
+        }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        closePaySheet();
+        showDone(tx, result);
+        // GWP_DONE → 고팡 탭 보고
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({
+            type: 'GWP_DONE',
+            summary: `${tx?.seller_name} 주문 완료 — ₩${tx?.total?.toLocaleString()}`,
+            pdvData: {
+              who:   from_guid || 'anonymous',
+              when:  new Date().toISOString(),
+              where: location.href,
+              what:  `${tx?.seller_name} 주문: ${tx?.items?.map(i=>`${i.name}×${i.quantity}`).join(', ')}`,
+              how:   `GDC 결제 ₩${tx?.total?.toLocaleString()}`,
+              why:   '사용자 주문 지시',
+            },
+          }, GOPANG_ORIGIN);
+        }
+      } else {
+        showToast('결제 실패: ' + (result.error || '알 수 없는 오류'));
+        resetPayBtn();
+      }
+    } catch(err) {
+      console.error('[Order]', err);
+      showToast('네트워크 오류. 다시 시도해 주세요.');
+      resetPayBtn();
+    }
+  }
+
+  if (type === 'GWP_SIGN_CANCELLED') {
+    showToast('서명이 취소되었습니다.');
+    resetPayBtn();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   6. 완료 화면
+═══════════════════════════════════════════════════════ */
+function showDone(tx, result) {
+  document.getElementById('done-sub').textContent =
+    `${(tx?.items||[]).map(i=>`${i.name} ${i.quantity}개`).join(', ')} 주문이 완료되었습니다.`;
+
+  const detail = document.getElementById('done-detail');
+  const bh = result?.block_hash || '';
+  detail.innerHTML = `
+    <div class="done-detail-row"><span>업체</span><strong>${esc(tx?.seller_name||'')}</strong></div>
+    <div class="done-detail-row"><span>합계</span><strong>₩${(tx?.total||0).toLocaleString()}</strong></div>
+    <div class="done-detail-row"><span>결제</span><strong>GDC (₮${(tx?.total||0).toLocaleString()})</strong></div>
+    ${bh ? `<div class="done-detail-row"><span>블록</span><strong style="font-size:10px;font-family:monospace">${bh.slice(0,16)}…</strong></div>` : ''}
+    <div class="done-detail-row"><span>시각</span><strong>${new Date().toLocaleTimeString('ko-KR')}</strong></div>`;
+
+  document.getElementById('done-screen').classList.add('show');
+}
+
+function closeDone() {
+  if (window.opener && !window.opener.closed) {
+    window.close();
+  } else {
+    document.getElementById('done-screen').classList.remove('show');
+    menuItems.forEach(m => qty[m.id] = 0);
+    renderProfile(profileData || getDummyProfile());
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   7. 유틸
+═══════════════════════════════════════════════════════ */
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showError(msg) {
+  const body = document.getElementById('profile-body');
+  body.innerHTML = `
+    <div class="state-screen">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <p>${msg}</p>
+    </div>`;
+}
+
+function showToast(msg, duration = 3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function closeWindow() {
+  if (window.opener && !window.opener.closed) window.close();
+  else history.back();
+}
+
+/* ── 초기화 ── */
+loadProfile();
+</script>
+</body>
+</html>
