@@ -719,11 +719,26 @@ window.addEventListener('message', async (e) => {
   const allowed = ['https://gopang.net', 'https://market.gopang.net',
                    'https://users.gopang.net'];
   if (!allowed.includes(e.origin)) return;
-  const { type, tx, tx_hash, buyer_sig, buyer_public_key, from_guid } = e.data || {};
+  const { type, signedTx, session_id, success, error: signError } = e.data || {};
+  if (type !== 'GWP_SIGN_RESPONSE') return;
 
-  if (type === 'GWP_SIGN_RESPONSE') {
-    showToast('서명 완료. 결제 처리 중…');
-    try {
+  if (!success || signError) {
+    showToast('서명 취소 또는 실패: ' + (signError || '알 수 없는 오류'));
+    resetPayBtn();
+    return;
+  }
+
+  // gopang-app.js는 signedTx 객체 안에 결과를 담아 전송
+  // signedTx = { tx, tx_hash, buyer_sig, buyer_public_key } 또는 wallet.sign() 반환값
+  const tx             = signedTx?.tx            || signedTx;
+  const tx_hash        = signedTx?.tx_hash        || null;
+  const buyer_sig      = signedTx?.buyer_sig      || null;
+  const buyer_public_key = signedTx?.buyer_public_key || signedTx?.publicKeyB64u || null;
+  const from_guid      = signedTx?.from_guid      || signedTx?.buyerGuid
+                       || window.gopangWallet?.guid || null;
+
+  showToast('서명 완료. 결제 처리 중…');
+  try {
       const p   = profileData?.profile || getDummyProfile().profile;
       const res = await fetch(`${PROXY_BASE}/biz/order`, {
         method: 'POST',
@@ -770,7 +785,6 @@ window.addEventListener('message', async (e) => {
       showToast('네트워크 오류. 다시 시도해 주세요.');
       resetPayBtn();
     }
-  }
 
   if (type === 'GWP_SIGN_CANCELLED') {
     showToast('서명이 취소되었습니다.');
