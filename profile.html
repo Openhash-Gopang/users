@@ -730,28 +730,44 @@ window.addEventListener('message', async (e) => {
 
   // gopang-app.js는 signedTx 객체 안에 결과를 담아 전송
   // signedTx = { tx, tx_hash, buyer_sig, buyer_public_key } 또는 wallet.sign() 반환값
-  const tx             = signedTx?.tx            || signedTx;
-  const tx_hash        = signedTx?.tx_hash        || null;
-  const buyer_sig      = signedTx?.buyer_sig      || null;
+  const tx               = signedTx?.tx            || signedTx;
+  const tx_hash          = signedTx?.tx_hash        || null;
+  const buyer_sig        = signedTx?.buyer_sig      || null;
   const buyer_public_key = signedTx?.buyer_public_key || signedTx?.publicKeyB64u || null;
-  const from_guid      = signedTx?.from_guid      || signedTx?.buyerGuid
-                       || window.gopangWallet?.guid || null;
+  const from_guid        = tx?.input?.owner_guid
+                         || signedTx?.from_guid
+                         || signedTx?.buyerGuid
+                         || window.gopangWallet?.guid || null;
+
+  console.log('[Order] payload 확인:', {
+    tx_hash, buyer_sig: !!buyer_sig, buyer_public_key: !!buyer_public_key,
+    from_guid, seller_guid: tx?.outputs?.[0]?.recipient_guid
+  });
 
   showToast('서명 완료. 결제 처리 중…');
   try {
-      const p   = profileData?.profile || getDummyProfile().profile;
+      const sellerOut    = tx?.outputs?.find(o => o.recipient_guid !== 'gopang-platform');
+      const platformOut  = tx?.outputs?.find(o => o.recipient_guid === 'gopang-platform');
       const res = await fetch(`${PROXY_BASE}/biz/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tx, tx_hash, buyer_sig, buyer_public_key,
+          tx,
+          tx_hash,
+          buyer_sig,
+          buyer_public_key,
           from_guid,
-          seller_guid:  tx?.seller_guid,
-          item_name:    tx?.items?.[0]?.name || '주문',
-          quantity:     tx?.items?.reduce((s,i) => s + i.quantity, 0) || 1,
-          memo:         tx?.memo,
-          l1_node:      L1_NODE,
-          reporter_svc: 'kmarket',
+          seller_guid:       sellerOut?.recipient_guid || tx?.seller_guid,
+          seller_net:        sellerOut?.amount || 0,
+          fee:               platformOut?.amount || 0,
+          item_name:         tx?.items?.[0]?.name || '주문',
+          quantity:          tx?.items?.reduce((s,i) => s + i.quantity, 0) || 1,
+          memo:              tx?.memo,
+          l1_node:           L1_NODE,
+          reporter_svc:      'kmarket',
+          prev_settle_hash:  signedTx?.prev_settle_hash || tx?.input?.prev_settle_hash,
+          balance_claimed:   tx?.input?.balance_claimed,
+          outputs:           tx?.outputs,
         }),
       });
       const result = await res.json();
