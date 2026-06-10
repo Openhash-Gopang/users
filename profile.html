@@ -744,6 +744,16 @@ window.addEventListener('message', async (e) => {
     from_guid, seller_guid: tx?.outputs?.[0]?.recipient_guid
   });
 
+  // 디버그용 전역 저장
+  window._lastOrderPayload = {
+    tx, tx_hash, buyer_sig, buyer_public_key, from_guid,
+    seller_guid: tx?.outputs?.find(o => o.recipient_guid !== 'gopang-platform')?.recipient_guid
+  };
+  console.log('[Order] tx_hash:', tx_hash);
+  console.log('[Order] buyer_sig:', buyer_sig?.substring(0,20) + '...');
+  console.log('[Order] from_guid:', from_guid);
+  console.log('[Order] outputs:', JSON.stringify(tx?.outputs));
+
   showToast('서명 완료. 결제 처리 중…');
   try {
       const sellerOut    = tx?.outputs?.find(o => o.recipient_guid !== 'gopang-platform');
