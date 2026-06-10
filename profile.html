@@ -653,11 +653,31 @@ function requestSign() {
     return { id: m.id, name: m.name, price: m.price, quantity: qty[m.id] };
   });
 
+  // gopang-app.js _handleGwpSignRequest가 요구하는 UTXO 형식
+  // tx.input + tx.outputs 필수
+  const FEE_RATE   = 0.05;                          // 플랫폼 수수료 5%
+  const platformFee = Math.round(total * FEE_RATE);
+  const sellerNet   = total - platformFee;
+  const sellerGuid  = p.primary_guid || p.current_ipv6;
+
   const tx = {
-    seller_guid:       p.primary_guid || p.current_ipv6,
+    // UTXO 형식 (gopang-app.js 필수 필드)
+    input: {
+      owner_guid:       null,           // gopang-wallet.js가 서명 시 자신의 guid 주입
+      prev_settle_hash: null,           // gopang-wallet.js buildTxWithPrevHash가 계산
+      balance_claimed:  total,
+    },
+    outputs: [
+      { recipient_guid: sellerGuid,        amount: sellerNet   },
+      { recipient_guid: 'gopang-platform', amount: platformFee },
+    ],
+    // 부가 메타데이터 (UI 표시 + /biz/order용)
+    seller_guid:       sellerGuid,
     seller_name:       p.name,
     items,
     total,
+    sellerNet,
+    platformFee,
     fs_account_buyer:  'pl-purchase',
     fs_account_seller: 'pl-revenue',
     currency:          'T',
