@@ -666,7 +666,11 @@ function requestSign() {
   };
 
   if (window.opener && !window.opener.closed) {
-    window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, GOPANG_ORIGIN);
+    // opener의 실제 origin으로 전송 (market.gopang.net 또는 gopang.net 모두 대응)
+    const openerOrigin = document.referrer
+      ? new URL(document.referrer).origin
+      : GOPANG_ORIGIN;
+    window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, openerOrigin);
     const btn = document.getElementById('pay-confirm-btn');
     btn.textContent = '⏳ 고팡 앱에서 서명 중…';
     btn.disabled = true;
@@ -691,7 +695,10 @@ function resetPayBtn() {
    5. GWP_SIGN_RESPONSE 수신 → /biz/order POST
 ═══════════════════════════════════════════════════════ */
 window.addEventListener('message', async (e) => {
-  if (e.origin !== GOPANG_ORIGIN) return;
+  // gopang.net 계열 origin 전체 허용
+  const allowed = ['https://gopang.net', 'https://market.gopang.net',
+                   'https://users.gopang.net'];
+  if (!allowed.includes(e.origin)) return;
   const { type, tx, tx_hash, buyer_sig, buyer_public_key, from_guid } = e.data || {};
 
   if (type === 'GWP_SIGN_RESPONSE') {
@@ -718,6 +725,9 @@ window.addEventListener('message', async (e) => {
         showDone(tx, result);
         // GWP_DONE → 고팡 탭 보고
         if (window.opener && !window.opener.closed) {
+          const openerOrigin = document.referrer
+            ? new URL(document.referrer).origin
+            : GOPANG_ORIGIN;
           window.opener.postMessage({
             type: 'GWP_DONE',
             summary: `${tx?.seller_name} 주문 완료 — ₩${tx?.total?.toLocaleString()}`,
@@ -729,7 +739,7 @@ window.addEventListener('message', async (e) => {
               how:   `GDC 결제 ₩${tx?.total?.toLocaleString()}`,
               why:   '사용자 주문 지시',
             },
-          }, GOPANG_ORIGIN);
+          }, openerOrigin);
         }
       } else {
         showToast('결제 실패: ' + (result.error || '알 수 없는 오류'));
