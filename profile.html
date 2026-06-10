@@ -359,17 +359,18 @@ html,body{
 const PROXY_BASE    = 'https://gopang-proxy.tensor-city.workers.dev';
 const GOPANG_ORIGIN  = 'https://gopang.net';
 const MARKET_ORIGIN  = 'https://market.gopang.net';
+
+/* ── URL 파라미터 파싱 ── */
+const params    = new URLSearchParams(location.search);
+const handle    = params.get('handle') || '';
+const guidParam = params.get('guid') || '';
+const isGwp     = params.get('gwp') === '1';
+
 // opener origin: URL 파라미터 → document.referrer → market 기본값
 const OPENER_ORIGIN  = params.get('opener_origin')
   || (document.referrer ? new URL(document.referrer).origin : null)
   || MARKET_ORIGIN;
 const L1_NODE       = 'KR-JEJU-JEJU-HANLIM';
-
-/* ── URL 파라미터 파싱 ── */
-const params  = new URLSearchParams(location.search);
-const handle  = params.get('handle') || '';
-const guidParam = params.get('guid') || '';
-const isGwp   = params.get('gwp') === '1';
 
 /* ── 상태 ── */
 let profileData = null;   // /biz/profile 응답
