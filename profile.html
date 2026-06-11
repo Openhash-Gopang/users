@@ -695,7 +695,7 @@ function requestSign() {
     // opener의 실제 origin으로 전송 (market.gopang.net 또는 gopang.net 모두 대응)
     // targetOrigin: URL 파라미터로 전달된 opener origin 사용
     window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, OPENER_ORIGIN);
-    setTimeout(() => window.close(), 200);  // 전송 확인 후 즉시 닫힘
+    // profile은 GWP_DONE 전송 후 자동 닫힘 (showDone → 3초 후 window.close)
   } else {
     // opener 없음 → 고팡 앱으로 리다이렉트 (T4 테스트)
     const ctx = btoa(unescape(encodeURIComponent(
@@ -784,7 +784,6 @@ window.addEventListener('message', async (e) => {
       const result = await res.json();
       if (result.ok) {
         closePaySheet();
-        showDone(tx, result);
         // GWP_DONE → 고팡 탭 보고
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
@@ -803,6 +802,8 @@ window.addEventListener('message', async (e) => {
             },
           }, OPENER_ORIGIN);
         }
+        // GWP_DONE 전송 후 profile 자동 닫힘
+        setTimeout(() => window.close(), 300);
       } else {
         showToast('결제 실패: ' + (result.error || '알 수 없는 오류'));
         resetPayBtn();
@@ -886,6 +887,7 @@ loadProfile();
 </script>
 </body>
 </html>
+
 
 
 
