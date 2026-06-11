@@ -791,8 +791,11 @@ window.addEventListener('message', async (e) => {
         // GWP_DONE → 고팡 탭 보고
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
-            type: 'GWP_DONE',
-            summary: `${tx?.seller_name} 주문 완료 — ₩${tx?.total?.toLocaleString()}`,
+            type:        'GWP_DONE',
+            summary:     `${tx?.seller_name} 주문 완료 — ₩${tx?.total?.toLocaleString()}`,
+            block_hash:  result.block_hash  || null,
+            tx_hash:     result.tx_hash     || null,
+            buyer_claim: result.buyer_claim || null,
             pdvData: {
               who:   from_guid || 'anonymous',
               when:  new Date().toISOString(),
