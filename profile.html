@@ -327,7 +327,7 @@ html,body{
     <div class="pay-rows" id="pay-rows"></div>
     <p class="pay-note">고팡 앱에서 서명하시면 즉시 처리됩니다.<br>구매자 1회 서명으로 거래가 완결됩니다.</p>
     <button class="pay-confirm-btn" id="pay-confirm-btn" onclick="requestSign()">
-      🔐 고팡으로 서명하여 결제
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>고팡으로 서명하여 결제
     </button>
     <button class="pay-cancel-btn" onclick="closePaySheet()">취소</button>
   </div>
@@ -480,7 +480,7 @@ function renderProfile(data) {
     <div class="biz-address">${esc(p.address || '')}</div>
     <div class="biz-tags">
       <span class="biz-tag">${esc(p.occupation || '')}</span>
-      ${ex.gdc_accepted ? '<span class="biz-tag gdc">GDC ✅</span>' : ''}
+      ${ex.gdc_accepted ? '<span class="biz-tag gdc">GDC</span>' : ''}
       ${ex.closed_days  ? `<span class="biz-tag">휴무: ${esc(ex.closed_days)}</span>` : ''}
     </div>`;
   body.appendChild(header);
@@ -548,7 +548,7 @@ function renderProfile(data) {
     <div class="info-row">
       <div class="info-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
       <span class="info-key">결제</span>
-      <span class="info-val">${ex.gdc_accepted ? 'GDC ✅ · 현금 · 카드' : '현금 · 카드'}</span>
+      <span class="info-val">${ex.gdc_accepted ? 'GDC · 현금 · 카드' : '현금 · 카드'}</span>
     </div>
     <div class="info-row">
       <div class="info-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
@@ -696,7 +696,7 @@ function requestSign() {
     // targetOrigin: URL 파라미터로 전달된 opener origin 사용
     window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, OPENER_ORIGIN);
     const btn = document.getElementById('pay-confirm-btn');
-    btn.textContent = '⏳ 고팡 앱에서 서명 중…';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>서명 중…';
     btn.disabled = true;
     showToast('고팡 앱에서 서명해 주세요.');
   } else {
@@ -711,7 +711,7 @@ function requestSign() {
 function resetPayBtn() {
   const btn = document.getElementById('pay-confirm-btn');
   if (!btn) return;
-  btn.textContent = '🔐 고팡으로 서명하여 결제';
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>고팡으로 서명하여 결제';
   btn.disabled = false;
 }
 
@@ -843,12 +843,17 @@ function showDone(tx, result) {
 
 function closeDone() {
   if (window.opener && !window.opener.closed) {
-    window.close();
-  } else {
-    document.getElementById('done-screen').classList.remove('show');
-    menuItems.forEach(m => qty[m.id] = 0);
-    renderProfile(profileData || getDummyProfile());
+    window.opener.postMessage({ type: 'PROFILE_DONE_ACK' }, OPENER_ORIGIN);
   }
+  setTimeout(() => {
+    if (window.opener && !window.opener.closed) {
+      window.close();
+    } else {
+      document.getElementById('done-screen').classList.remove('show');
+      menuItems.forEach(m => qty[m.id] = 0);
+      renderProfile(profileData || getDummyProfile());
+    }
+  }, 150);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -884,4 +889,5 @@ loadProfile();
 </script>
 </body>
 </html>
+
 
