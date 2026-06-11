@@ -314,7 +314,7 @@ html,body{
       <span class="order-count">선택 <strong id="total-count">0</strong>개</span>
       <span class="order-total"><span>합계</span><span id="total-price">₩0</span></span>
     </div>
-    <button class="order-btn" id="order-btn" disabled onclick="openPaySheet()">주문하기</button>
+    <button class="order-btn" id="order-btn" disabled onclick="requestSign()">주문하기</button>
   </div>
 
 </div><!-- /.app -->
@@ -695,10 +695,7 @@ function requestSign() {
     // opener의 실제 origin으로 전송 (market.gopang.net 또는 gopang.net 모두 대응)
     // targetOrigin: URL 파라미터로 전달된 opener origin 사용
     window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, OPENER_ORIGIN);
-    const btn = document.getElementById('pay-confirm-btn');
-    btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>서명 중…';
-    btn.disabled = true;
-    showToast('고팡 앱에서 서명해 주세요.');
+    setTimeout(() => window.close(), 200);  // 전송 확인 후 즉시 닫힘
   } else {
     // opener 없음 → 고팡 앱으로 리다이렉트 (T4 테스트)
     const ctx = btoa(unescape(encodeURIComponent(
@@ -889,5 +886,6 @@ loadProfile();
 </script>
 </body>
 </html>
+
 
 
