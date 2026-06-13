@@ -345,8 +345,14 @@ async function ensureIdentity() {
 // 서버(_verifyEd25519)는 {signature, ...rest}에서 rest를 JSON.stringify하여 검증하므로
 // 키 순서가 보존되도록 동일한 객체 리터럴 순서를 그대로 사용한다.
 async function signRequest(payload) {
-  const wallet = window.gopangWallet;
-  const signature = await wallet.sign(JSON.stringify(payload));
+  // wallet.sign()은 gopang-wallet.js v2.0에서 K-Market UTXO 결제용으로 재정의되어
+  // {tx, tx_hash, buyer_sig, ...} 객체를 반환함 — /profile Ed25519 서명에 사용 불가.
+  // wallet._privKey(CryptoKey)로 crypto.subtle.sign()을 직접 호출해 Base64URL 서명 생성.
+  const wallet   = window.gopangWallet;
+  const msgBytes = new TextEncoder().encode(JSON.stringify(payload));
+  const sigBuf   = await crypto.subtle.sign('Ed25519', wallet._privKey, msgBytes);
+  const signature = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   return { ...payload, signature };
 }
 
