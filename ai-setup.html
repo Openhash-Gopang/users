@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AI 비서 설정 — 고팡</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --green-dark: #15803d;
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-400: #9ca3af;
+  --gray-600: #4b5563;
+  --gray-900: #111827;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Pretendard', -apple-system, sans-serif;
+  background: var(--gray-50);
+  color: var(--gray-900);
+  min-height: 100vh;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* 헤더 */
+.header {
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.back-btn {
+  width: 36px; height: 36px;
+  border: none; background: var(--gray-100);
+  border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: var(--gray-600);
+  flex-shrink: 0;
+}
+.header-title { font-size: 17px; font-weight: 600; }
+
+/* 상태 배지 */
+.status-bar {
+  background: #fff;
+  margin: 12px 16px 0;
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+}
+.status-label { font-size: 13px; color: var(--gray-600); }
+.toggle-wrap { display: flex; align-items: center; gap: 8px; }
+.toggle {
+  width: 44px; height: 24px;
+  background: var(--gray-200);
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background .2s;
+  border: none;
+}
+.toggle.on { background: var(--green); }
+.toggle::after {
+  content: '';
+  width: 18px; height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px; left: 3px;
+  transition: transform .2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.toggle.on::after { transform: translateX(20px); }
+.toggle-text { font-size: 13px; font-weight: 500; color: var(--gray-600); }
+.toggle.on + .toggle-text { color: var(--green-dark); }
+
+/* 섹션 */
+.section {
+  background: #fff;
+  margin: 12px 16px 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 14px 16px 8px;
+}
+.field { padding: 0 16px 16px; }
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-600);
+  margin-bottom: 6px;
+}
+.field label .required {
+  color: var(--red);
+  margin-left: 2px;
+}
+.field label .optional {
+  color: var(--gray-400);
+  font-weight: 400;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.input, .select, .textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--gray-900);
+  background: #fff;
+  transition: border-color .15s;
+  outline: none;
+}
+.input:focus, .select:focus, .textarea:focus {
+  border-color: var(--green);
+}
+.input.error { border-color: var(--red); }
+.textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+.input-wrap { position: relative; }
+.input-wrap .eye-btn {
+  position: absolute;
+  right: 10px; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none;
+  cursor: pointer; font-size: 18px;
+  color: var(--gray-400);
+}
+
+/* 제공자 선택 */
+.provider-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.provider-card {
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.provider-card.selected {
+  border-color: var(--green);
+  background: var(--green-light);
+}
+.provider-name { font-size: 14px; font-weight: 600; }
+.provider-desc { font-size: 11px; color: var(--gray-400); }
+.provider-card.selected .provider-desc { color: var(--green-dark); }
+
+/* 모델 선택 */
+.model-options { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.model-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.model-item.selected { border-color: var(--green); background: var(--green-light); }
+.model-item input[type=radio] { accent-color: var(--green); }
+.model-item-info { flex: 1; }
+.model-name { font-size: 14px; font-weight: 500; }
+.model-note { font-size: 11px; color: var(--gray-400); }
+.model-item.selected .model-note { color: var(--green-dark); }
+
+/* 프롬프트 섹션 */
+.prompt-toolbar {
+  padding: 0 16px 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  cursor: pointer;
+  color: var(--gray-600);
+  transition: all .15s;
+  white-space: nowrap;
+}
+.chip:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
+.token-count {
+  font-size: 11px;
+  color: var(--gray-400);
+  padding: 0 16px 8px;
+  text-align: right;
+}
+.token-count.warn { color: var(--yellow); }
+
+/* 테스트 패널 */
+.test-panel {
+  background: #fff;
+  margin: 12px 16px 0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.test-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.test-title { font-size: 14px; font-weight: 600; }
+.test-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+.test-chat { padding: 12px 16px; min-height: 80px; max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.test-msg {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.test-msg.user { align-self: flex-end; background: var(--green); color: #fff; border-radius: 10px 10px 2px 10px; }
+.test-msg.ai { align-self: flex-start; background: var(--gray-100); color: var(--gray-900); border-radius: 10px 10px 10px 2px; }
+.test-msg.loading { color: var(--gray-400); font-style: italic; }
+.test-input-row {
+  padding: 10px 16px;
+  border-top: 1px solid var(--gray-200);
+  display: flex;
+  gap: 8px;
+}
+.test-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+.test-input:focus { border-color: var(--green); }
+.test-send {
+  width: 36px; height: 36px;
+  background: var(--green);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.test-send:disabled { background: var(--gray-200); cursor: not-allowed; }
+
+/* 경고 박스 */
+.warning-box {
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #9a3412;
+  line-height: 1.5;
+}
+.warning-box strong { display: block; margin-bottom: 4px; }
+
+/* 저장 버튼 */
+.save-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 16px 16px;
+  padding: 14px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s;
+}
+.save-btn:hover { background: var(--green-dark); }
+.save-btn:disabled { background: var(--gray-200); color: var(--gray-400); cursor: not-allowed; }
+
+/* 토스트 */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--gray-900);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: transform .3s ease;
+  z-index: 100;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* 하단 여백 */
+.bottom-space { height: 24px; }
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<header class="header">
+  <button class="back-btn" onclick="history.back()">←</button>
+  <span class="header-title">AI 비서 설정</span>
+</header>
+
+<!-- AI 비서 ON/OFF -->
+<div class="status-bar">
+  <div>
+    <div style="font-size:15px;font-weight:600;">AI 비서</div>
+    <div class="status-label" id="statusLabel">비활성 — 방문자가 AI 비서를 사용할 수 없습니다</div>
+  </div>
+  <div class="toggle-wrap">
+    <button class="toggle" id="aiToggle" onclick="toggleAI()"></button>
+    <span class="toggle-text" id="toggleText">OFF</span>
+  </div>
+</div>
+
+<!-- 경고 박스 -->
+<div class="warning-box">
+  <strong>⚠️ API 키 보안 안내</strong>
+  입력하신 API 키는 AES-256-GCM 방식으로 암호화되어 서버에 저장됩니다.
+  키는 AI 비서 응답 생성 시에만 복호화되며, 고팡 운영팀도 원문을 볼 수 없습니다.
+</div>
+
+<!-- LLM 제공자 선택 -->
+<div class="section">
+  <div class="section-title">AI 제공자</div>
+  <div class="provider-grid">
+    <div class="provider-card selected" id="prov_deepseek" onclick="selectProvider('deepseek')">
+      <div class="provider-name">🔵 DeepSeek</div>
+      <div class="provider-desc">저렴 · 한국어 우수</div>
+    </div>
+    <div class="provider-card" id="prov_anthropic" onclick="selectProvider('anthropic')">
+      <div class="provider-name">🟣 Anthropic</div>
+      <div class="provider-desc">Claude — 정확성 높음</div>
+    </div>
+    <div class="provider-card" id="prov_openai" onclick="selectProvider('openai')">
+      <div class="provider-name">🟢 OpenAI</div>
+      <div class="provider-desc">GPT-4o — 범용</div>
+    </div>
+    <div class="provider-card" id="prov_custom" onclick="selectProvider('custom')">
+      <div class="provider-name">⚙️ 직접 입력</div>
+      <div class="provider-desc">OpenAI 호환 API</div>
+    </div>
+  </div>
+
+  <!-- 커스텀 엔드포인트 (직접 입력 시만 표시) -->
+  <div class="field" id="customEndpointWrap" style="display:none;">
+    <label>API 엔드포인트 URL</label>
+    <input class="input" id="customEndpoint" type="url"
+      placeholder="https://api.example.com/v1/chat/completions">
+  </div>
+</div>
+
+<!-- API 키 입력 -->
+<div class="section">
+  <div class="section-title">API 키</div>
+  <div class="field">
+    <label>API 키 <span class="required">*</span></label>
+    <div class="input-wrap">
+      <input class="input" id="apiKey" type="password"
+        placeholder="sk-..." autocomplete="off" oninput="onApiKeyInput()">
+      <button class="eye-btn" id="eyeBtn" onclick="toggleEye()">👁</button>
+    </div>
+    <div id="apiKeyHint" style="font-size:12px;color:var(--gray-400);margin-top:4px;"></div>
+  </div>
+</div>
+
+<!-- 모델 선택 -->
+<div class="section">
+  <div class="section-title">모델</div>
+  <div class="model-options" id="modelOptions"></div>
+</div>
+
+<!-- 인사말 설정 -->
+<div class="section">
+  <div class="section-title">비서 설정</div>
+  <div class="field">
+    <label>첫 인사말 <span class="optional">(선택)</span></label>
+    <input class="input" id="welcomeMsg"
+      placeholder="어서오세요! 무엇을 도와드릴까요?"
+      value="어서오세요! 무엇을 도와드릴까요?">
+  </div>
+  <div class="field">
+    <label>영업 외 시간 응답 <span class="optional">(선택)</span></label>
+    <input class="input" id="offHoursMsg"
+      placeholder="현재 운영 시간이 아닙니다. 영업시간에 다시 문의해 주세요."
+      value="현재 운영 시간이 아닙니다. 영업시간에 다시 문의해 주세요.">
+  </div>
+</div>
+
+<!-- System Prompt -->
+<div class="section">
+  <div class="section-title">System Prompt</div>
+  <div class="prompt-toolbar">
+    <button class="chip" onclick="loadTemplate('restaurant')">🍜 음식점</button>
+    <button class="chip" onclick="loadTemplate('accommodation')">🏨 숙박</button>
+    <button class="chip" onclick="loadTemplate('healthcare')">🏥 보건</button>
+    <button class="chip" onclick="loadTemplate('education')">📚 교육</button>
+    <button class="chip" onclick="loadTemplate('retail')">🛒 소매</button>
+    <button class="chip" onclick="loadTemplate('gov')">🏛 공공기관</button>
+    <button class="chip" onclick="loadTemplate('law')">⚖️ 법률</button>
+    <button class="chip" onclick="loadTemplate('base')">📄 기본</button>
+  </div>
+  <div class="field">
+    <textarea class="textarea" id="systemPrompt" rows="8"
+      oninput="updateTokenCount()"
+      placeholder="AI 비서의 역할과 응답 규칙을 입력하세요."></textarea>
+  </div>
+  <div class="token-count" id="tokenCount">약 0 토큰</div>
+</div>
+
+<!-- 테스트 채팅 -->
+<div class="test-panel">
+  <div class="test-header">
+    <span class="test-title">💬 테스트 채팅</span>
+    <span class="test-badge" id="testBadge">저장 후 활성화</span>
+  </div>
+  <div class="test-chat" id="testChat">
+    <div class="test-msg ai">AI 비서를 설정하고 저장하면 여기서 미리 테스트할 수 있습니다.</div>
+  </div>
+  <div class="test-input-row">
+    <input class="test-input" id="testInput"
+      placeholder="테스트 메시지 입력..."
+      onkeydown="if(event.key==='Enter')sendTest()"
+      disabled>
+    <button class="test-send" id="testSendBtn" onclick="sendTest()" disabled>↑</button>
+  </div>
+</div>
+
+<!-- 저장 버튼 -->
+<button class="save-btn" id="saveBtn" onclick="save()">설정 저장</button>
+
+<div class="bottom-space"></div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// ── 설정 ──────────────────────────────────────────────────────
+const WORKER = 'https://gopang-proxy.tensor-city.workers.dev';
+
+// ── 상태 ──────────────────────────────────────────────────────
+let state = {
+  aiActive:    false,
+  provider:    'deepseek',
+  model:       'deepseek-chat',
+  apiKey:      '',
+  apiKeySaved: false,   // 이미 저장된 키 있음
+  welcomeMsg:  '어서오세요! 무엇을 도와드릴까요?',
+  offHoursMsg: '현재 운영 시간이 아닙니다.',
+  systemPrompt: '',
+  testReady:   false,
+};
+
+// ── 모델 목록 ──────────────────────────────────────────────────
+const MODELS = {
+  deepseek:  [
+    { id: 'deepseek-chat',     name: 'DeepSeek V3',   note: '범용 · 저비용 ($0.14/Mtok)' },
+    { id: 'deepseek-reasoner', name: 'DeepSeek R1',   note: '추론 특화 · 고비용' },
+  ],
+  anthropic: [
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet', note: '빠름 · 균형 잡힌 성능' },
+    { id: 'claude-haiku-4-5-20251001',  name: 'Claude Haiku',  note: '최저비용 · 빠른 응답' },
+  ],
+  openai:    [
+    { id: 'gpt-4o-mini', name: 'GPT-4o mini', note: '저비용 · 빠름' },
+    { id: 'gpt-4o',      name: 'GPT-4o',      note: '고성능 · 고비용' },
+  ],
+  custom:    [
+    { id: 'custom', name: '커스텀 모델', note: '엔드포인트 직접 입력' },
+  ],
+};
+
+// ── 샘플 System Prompt 템플릿 ──────────────────────────────────
+const TEMPLATES = {
+  base: `당신은 고팡(Gopang) AI 비서입니다.
+아래 [업체 정보]와 [서비스]를 기반으로만 답변합니다.
+
+[공통 규칙]
+1. 모르는 정보: "잘 모르겠습니다. 직접 문의해 주세요"로 답합니다
+2. 가격: 항상 GDC(₮) 단위로 안내합니다
+3. 언어: 고객이 사용하는 언어로 응답합니다
+4. 개인정보: 다른 고객 정보는 절대 공개하지 않습니다
+5. 주문 의사 확인 시: "주문을 진행할까요?" 후 결제 안내합니다`,
+
+  restaurant: `당신은 고팡(Gopang) AI 비서입니다.
+아래 [메뉴 정보]를 기반으로만 답변합니다.
+
+[공통 규칙]
+1. 메뉴에 없는 정보는 "잘 모르겠습니다. 직접 문의해 주세요"로 답합니다
+2. 가격은 항상 GDC(₮) 단위로 안내합니다
+3. 고객 언어로 응답합니다
+4. 알레르기 문의 시 정확한 정보를 안내합니다
+5. "주문할게요" 의사 확인 시 결제 URL을 안내합니다
+6. 타 식당 비교·추천은 하지 않습니다
+
+[메뉴]
+(profile 설정에서 자동 주입됩니다)`,
+
+  accommodation: `당신은 고팡(Gopang) AI 비서입니다.
+숙박 예약 안내를 담당합니다.
+
+[규칙]
+1. 객실 유형·가격·가용 여부를 정확히 안내합니다
+2. 체크인 시간, 체크아웃 시간을 반드시 안내합니다
+3. 취소 정책을 예약 전에 반드시 안내합니다
+4. 예약 확정은 담당자 연결이 필요합니다
+5. 고객 언어로 응답합니다
+
+[객실 정보]
+(profile 설정에서 자동 주입됩니다)`,
+
+  healthcare: `당신은 고팡(Gopang) AI 비서입니다.
+진료 예약 및 일반 안내를 담당합니다.
+
+[안전 규칙 — 반드시 준수]
+1. 진단·처방·의학적 판단은 절대 하지 않습니다
+   → "의사 선생님께 직접 문의하세요"로 안내합니다
+2. 증상 관련 질문 → "진료가 필요합니다. 내원하시겠습니까?"로만 답합니다
+3. 약 복용법·용량은 안내하지 않습니다
+4. 응급 증상(가슴통증·호흡곤란 등) 감지 시 즉시 119를 안내합니다
+5. 예약 가능 시간 안내 후 확정은 담당자 연결합니다
+
+[진료 안내]
+(profile 설정에서 자동 주입됩니다)`,
+
+  education: `당신은 고팡(Gopang) AI 비서입니다.
+교육 프로그램 안내를 담당합니다.
+
+[규칙]
+1. 수강 프로그램·일정·가격을 정확히 안내합니다
+2. 체험 수업 가능 여부를 안내합니다
+3. 등록은 결제 URL 또는 담당자 연결로 안내합니다
+4. 타 교육기관 비교는 하지 않습니다
+5. 고객 언어로 응답합니다
+
+[프로그램]
+(profile 설정에서 자동 주입됩니다)`,
+
+  retail: `당신은 고팡(Gopang) AI 비서입니다.
+상품 및 배송 안내를 담당합니다.
+
+[규칙]
+1. 재고 상황을 정확히 안내합니다 (품절 시 명확히 안내)
+2. 배송 가능 지역과 소요 기간을 안내합니다
+3. 원산지·인증 정보를 정확히 안내합니다
+4. 환불·교환 정책을 안내합니다
+5. 고객 언어로 응답합니다
+
+[상품]
+(profile 설정에서 자동 주입됩니다)`,
+
+  gov: `당신은 고팡(Gopang) AI 비서입니다.
+민원 서비스 안내를 담당합니다.
+
+[규칙]
+1. 민원 처리 절차·구비서류·수수료를 정확히 안내합니다
+2. 법적 판단·행정 결정은 담당 공무원을 연결합니다
+3. 개인정보(주민번호 등)는 절대 요구하거나 제공하지 않습니다
+4. 온라인 처리 가능 민원은 정부24 URL을 안내합니다
+5. 긴급 상황 시 119/112를 즉시 안내합니다
+
+[서비스]
+(profile 설정에서 자동 주입됩니다)`,
+
+  law: `당신은 고팡(Gopang) AI 비서입니다.
+법률 상담 예약 안내를 담당합니다.
+
+[규칙 — 반드시 준수]
+1. 법률 판단·법적 의견은 절대 제공하지 않습니다
+   → "변호사 선생님께 직접 상담하세요"로 안내합니다
+2. 상담 가능 분야·예약 방법·비용은 안내할 수 있습니다
+3. 긴급 법률 상황 → 대한법률구조공단 132를 안내합니다
+4. 고객 언어로 응답합니다
+
+[서비스]
+(profile 설정에서 자동 주입됩니다)`,
+};
+
+// ── 초기화 ────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  renderModels();
+  loadTemplate('base');
+  await loadSavedSettings();
+});
+
+async function loadSavedSettings() {
+  const token = localStorage.getItem('gopang_token');
+  if (!token) return;
+  try {
+    const res = await fetch(`${WORKER}/ai-setup`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.ai_active !== undefined) {
+      state.aiActive    = data.ai_active;
+      state.provider    = data.provider    || 'deepseek';
+      state.model       = data.model       || 'deepseek-chat';
+      state.apiKeySaved = data.has_key     || false;
+      state.systemPrompt = data.custom_prompt || '';
+
+      updateToggleUI();
+      selectProvider(state.provider, false);
+      selectModel(state.model);
+      if (state.systemPrompt) {
+        document.getElementById('systemPrompt').value = state.systemPrompt;
+        updateTokenCount();
+      }
+      if (data.welcome_message) {
+        document.getElementById('welcomeMsg').value = data.welcome_message;
+      }
+      if (data.off_hours_message) {
+        document.getElementById('offHoursMsg').value = data.off_hours_message;
+      }
+      if (state.apiKeySaved) {
+        document.getElementById('apiKey').placeholder = '●●●●●●●●●●●● (저장된 키)';
+        document.getElementById('apiKeyHint').textContent = '키가 암호화 저장되어 있습니다. 변경하려면 새 키를 입력하세요.';
+      }
+    }
+  } catch(e) { /* 미설정 상태 — 무시 */ }
+}
+
+// ── AI ON/OFF ─────────────────────────────────────────────────
+window.toggleAI = () => {
+  state.aiActive = !state.aiActive;
+  updateToggleUI();
+};
+
+function updateToggleUI() {
+  const t = document.getElementById('aiToggle');
+  const txt = document.getElementById('toggleText');
+  const lbl = document.getElementById('statusLabel');
+  if (state.aiActive) {
+    t.classList.add('on');
+    txt.textContent = 'ON';
+    lbl.textContent = '활성 — 방문자가 AI 비서를 사용할 수 있습니다';
+  } else {
+    t.classList.remove('on');
+    txt.textContent = 'OFF';
+    lbl.textContent = '비활성 — 방문자가 AI 비서를 사용할 수 없습니다';
+  }
+}
+
+// ── 제공자 선택 ───────────────────────────────────────────────
+window.selectProvider = (p, resetModel = true) => {
+  state.provider = p;
+  document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById(`prov_${p}`)?.classList.add('selected');
+  document.getElementById('customEndpointWrap').style.display = p === 'custom' ? 'block' : 'none';
+  if (resetModel) state.model = MODELS[p]?.[0]?.id || 'custom';
+  renderModels();
+  updateApiKeyHint(p);
+};
+
+function updateApiKeyHint(p) {
+  const hints = {
+    deepseek:  'DeepSeek API 키: platform.deepseek.com',
+    anthropic: 'Anthropic API 키: console.anthropic.com',
+    openai:    'OpenAI API 키: platform.openai.com',
+    custom:    'OpenAI 호환 API 키',
+  };
+  if (!state.apiKeySaved)
+    document.getElementById('apiKeyHint').textContent = hints[p] || '';
+}
+
+// ── 모델 렌더 ─────────────────────────────────────────────────
+function renderModels() {
+  const wrap = document.getElementById('modelOptions');
+  const list = MODELS[state.provider] || [];
+  wrap.innerHTML = list.map(m => `
+    <div class="model-item${m.id === state.model ? ' selected' : ''}"
+         onclick="selectModel('${m.id}')">
+      <input type="radio" name="model"${m.id === state.model ? ' checked' : ''}>
+      <div class="model-item-info">
+        <div class="model-name">${m.name}</div>
+        <div class="model-note">${m.note}</div>
+      </div>
+    </div>`).join('');
+}
+
+window.selectModel = (id) => {
+  state.model = id;
+  renderModels();
+};
+
+// ── API 키 입력 ───────────────────────────────────────────────
+window.onApiKeyInput = () => {
+  state.apiKey = document.getElementById('apiKey').value;
+};
+window.toggleEye = () => {
+  const inp = document.getElementById('apiKey');
+  const btn = document.getElementById('eyeBtn');
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
+  else                         { inp.type = 'password'; btn.textContent = '👁'; }
+};
+
+// ── 템플릿 로드 ───────────────────────────────────────────────
+window.loadTemplate = (key) => {
+  document.getElementById('systemPrompt').value = TEMPLATES[key] || TEMPLATES.base;
+  updateTokenCount();
+};
+
+// ── 토큰 추정 ─────────────────────────────────────────────────
+function updateTokenCount() {
+  const text = document.getElementById('systemPrompt').value;
+  const est  = Math.ceil(text.length / 3.5);   // 한국어 기준 rough 추정
+  const el   = document.getElementById('tokenCount');
+  el.textContent = `약 ${est.toLocaleString()} 토큰`;
+  el.className   = `token-count${est > 800 ? ' warn' : ''}`;
+}
+
+// ── 저장 ──────────────────────────────────────────────────────
+window.save = async () => {
+  const btn = document.getElementById('saveBtn');
+  const key = document.getElementById('apiKey').value.trim();
+
+  if (!state.apiKeySaved && !key) {
+    document.getElementById('apiKey').classList.add('error');
+    showToast('API 키를 입력해 주세요');
+    return;
+  }
+  document.getElementById('apiKey').classList.remove('error');
+
+  const token = localStorage.getItem('gopang_token');
+  if (!token) { showToast('로그인이 필요합니다'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+
+  const body = {
+    provider:         state.provider,
+    model:            state.model,
+    ai_active:        state.aiActive,
+    custom_prompt:    document.getElementById('systemPrompt').value,
+    welcome_message:  document.getElementById('welcomeMsg').value,
+    off_hours_message:document.getElementById('offHoursMsg').value,
+  };
+  if (key) body.api_key = key;
+  if (state.provider === 'custom') {
+    body.endpoint = document.getElementById('customEndpoint').value;
+  }
+
+  try {
+    const res = await fetch(`${WORKER}/ai-setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    state.apiKeySaved = true;
+    state.testReady   = true;
+    document.getElementById('testInput').disabled     = false;
+    document.getElementById('testSendBtn').disabled   = false;
+    document.getElementById('testBadge').textContent  = '테스트 가능';
+    showToast('✅ 저장 완료');
+  } catch(e) {
+    showToast(`저장 실패: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '설정 저장';
+  }
+};
+
+// ── 테스트 채팅 ───────────────────────────────────────────────
+window.sendTest = async () => {
+  const input = document.getElementById('testInput');
+  const msg   = input.value.trim();
+  if (!msg) return;
+
+  const token = localStorage.getItem('gopang_token');
+  if (!token) { showToast('로그인이 필요합니다'); return; }
+
+  addTestMsg(msg, 'user');
+  input.value = '';
+  const loadingEl = addTestMsg('응답 생성 중...', 'loading');
+
+  try {
+    const res = await fetch(`${WORKER}/ai-chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        session_id: 'test_' + Date.now(),
+        message:    msg,
+        test_mode:  true,
+      }),
+    });
+    const data = await res.json();
+    loadingEl.remove();
+    addTestMsg(data.reply || data.message || '(응답 없음)', 'ai');
+  } catch(e) {
+    loadingEl.remove();
+    addTestMsg(`오류: ${e.message}`, 'ai');
+  }
+};
+
+function addTestMsg(text, type) {
+  const chat = document.getElementById('testChat');
+  const el   = document.createElement('div');
+  el.className = `test-msg ${type}`;
+  el.textContent = text;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+// ── 토스트 ────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
