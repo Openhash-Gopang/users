@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>프로필 등록 — 고팡</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap">
+<!-- gopangWallet 싱글턴: 로드 시 키페어 자동 생성/연결 (gopang_user_v3.ipv6 있으면 guid 자동 연결) -->
+<script src="/gopang-wallet.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Pretendard',-apple-system,'Helvetica Neue',sans-serif;
+  font-size:15px;background:#fff;color:#111;-webkit-font-smoothing:antialiased}
+:root{
+  --green:#16a34a;--green-lt:#dcfce7;--green-dk:#15803d;--green-bd:#86efac;
+  --border:#e5e7eb;--txt2:#6b7280;--txt3:#9ca3af;
+  --chip-bg:#f9fafb;--bg-subtle:#f4f4f5;
+}
+.page{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff;z-index:10}
+header .back{font-size:20px;color:var(--txt2);text-decoration:none;cursor:pointer;background:none;border:none}
+header h1{font-size:17px;font-weight:700}
+main{flex:1;padding:20px 18px 100px}
+
+.step-indicator{display:flex;gap:6px;margin-bottom:24px}
+.step-dot{flex:1;height:4px;border-radius:2px;background:var(--border)}
+.step-dot.active{background:var(--green)}
+.step-dot.done{background:var(--green-bd)}
+
+.section-title{font-size:13px;font-weight:700;color:var(--green-dk);margin:24px 0 10px;letter-spacing:.02em}
+.section-title:first-child{margin-top:0}
+
+.field-group{margin-bottom:14px}
+.field-label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+.field-hint{font-size:11.5px;color:var(--txt3);margin-top:4px;line-height:1.5}
+.field{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border);
+  font-size:14px;background:#fff;color:#111;font-family:inherit}
+.field:focus{outline:none;border-color:var(--green)}
+textarea.field{resize:vertical;line-height:1.5}
+
+.entity-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.entity-card{border:1.5px solid var(--border);border-radius:12px;padding:16px 12px;text-align:center;
+  cursor:pointer;background:#fff;transition:.15s}
+.entity-card .ic{font-size:28px;display:block;margin-bottom:6px}
+.entity-card .lbl{font-size:13px;font-weight:600;color:#374151}
+.entity-card .desc{font-size:11px;color:var(--txt3);margin-top:2px}
+.entity-card.selected{border-color:var(--green);background:var(--green-lt)}
+
+.chip-row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:8px 14px;border-radius:999px;border:1px solid var(--border);font-size:13px;
+  cursor:pointer;background:#fff;color:#374151;user-select:none}
+.chip.selected{background:var(--green);border-color:var(--green);color:#fff}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+  border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
+.toggle-row .label{font-size:13.5px;font-weight:600;color:#374151}
+.toggle-row .desc{font-size:11.5px;color:var(--txt3);margin-top:2px}
+.switch{position:relative;width:44px;height:26px;flex-shrink:0;margin-left:12px}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;inset:0;background:#d1d5db;border-radius:999px;cursor:pointer;transition:.2s}
+.switch .slider::before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;
+  background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked + .slider{background:var(--green)}
+.switch input:checked + .slider::before{transform:translateX(18px)}
+
+.hours-row{display:grid;grid-template-columns:48px 1fr 12px 1fr 50px;gap:6px;align-items:center;margin-bottom:6px}
+.hours-row .day{font-size:12.5px;font-weight:600;color:#374151}
+.hours-row input[type="time"]{padding:8px 6px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;width:100%}
+.hours-row .sep{text-align:center;color:var(--txt3);font-size:12px}
+.hours-row .closed-toggle{font-size:11px;color:var(--txt2);cursor:pointer;text-align:center}
+.hours-row.closed input[type="time"]{opacity:.3;pointer-events:none}
+
+.geo-box{display:flex;gap:8px;align-items:flex-start}
+.geo-box .field{flex:1}
+.geo-btn{padding:12px 16px;border-radius:10px;border:1px solid var(--border);background:var(--chip-bg);
+  font-size:13px;font-weight:600;color:#374151;cursor:pointer;white-space:nowrap}
+.geo-result{font-size:12px;color:var(--green-dk);margin-top:6px;display:none}
+.geo-result.show{display:block}
+
+.identity-box{background:var(--chip-bg);border:1px solid var(--border);border-radius:10px;
+  padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--txt2);line-height:1.7}
+.identity-box code{font-size:10.5px;color:#374151;word-break:break-all}
+.identity-box .warn{color:#b45309;margin-top:6px}
+
+.status-msg{font-size:12.5px;padding:10px 12px;border-radius:8px;margin-bottom:14px;display:none}
+.status-msg.show{display:block}
+.status-msg.info{background:#eff6ff;color:#1d4ed8}
+.status-msg.error{background:#fef2f2;color:#dc2626}
+.status-msg.success{background:var(--green-lt);color:var(--green-dk)}
+
+.footer{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;
+  padding:14px 18px;background:#fff;border-top:1px solid var(--border);
+  display:flex;gap:10px}
+.btn{flex:1;padding:14px;border-radius:12px;font-size:15px;font-weight:700;border:none;cursor:pointer}
+.btn-primary{background:var(--green);color:#fff}
+.btn-primary:disabled{background:#d1d5db;cursor:not-allowed}
+.btn-secondary{background:var(--chip-bg);color:#374151;border:1px solid var(--border)}
+
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <button class="back" onclick="history.back()">←</button>
+    <h1>프로필 등록</h1>
+  </header>
+
+  <main>
+    <div class="step-indicator">
+      <div class="step-dot" id="dot-1"></div>
+      <div class="step-dot" id="dot-2"></div>
+      <div class="step-dot" id="dot-3"></div>
+    </div>
+
+    <div id="status-box" class="status-msg"></div>
+
+    <section id="step-1">
+      <div class="section-title">어떤 프로필을 등록하시겠습니까?</div>
+      <div class="entity-grid">
+        <div class="entity-card" data-type="person">
+          <span class="ic">🙂</span>
+          <div class="lbl">개인</div>
+          <div class="desc">나의 프로필</div>
+        </div>
+        <div class="entity-card" data-type="business">
+          <span class="ic">🏪</span>
+          <div class="lbl">사업체</div>
+          <div class="desc">가게·매장 운영</div>
+        </div>
+        <div class="entity-card" data-type="org">
+          <span class="ic">🏢</span>
+          <div class="lbl">단체/법인</div>
+          <div class="desc">조합·협회 등</div>
+        </div>
+        <div class="entity-card" data-type="institution">
+          <span class="ic">🏛</span>
+          <div class="lbl">공공기관</div>
+          <div class="desc">관공서·공공시설</div>
+        </div>
+      </div>
+      <div class="field-hint" style="margin-top:14px">
+        등록한 프로필은 고팡 검색·AI 비서를 통해 다른 사용자에게 노출될 수 있습니다.
+        공개 범위는 다음 단계에서 조정할 수 있습니다.
+      </div>
+    </section>
+
+    <section id="step-2" class="hidden">
+      <div class="section-title">기본 정보</div>
+
+      <div class="field-group">
+        <label class="field-label" id="name-label">이름 / 상호명 *</label>
+        <input class="field" id="f-name" type="text" placeholder="예: 금능반점">
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">소개</label>
+        <textarea class="field" id="f-description" rows="2" placeholder="예: 제주 한림 중화요리 전문점"></textarea>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">태그</label>
+        <div class="chip-row" id="tag-chips"></div>
+        <input class="field" id="f-tag-custom" type="text" placeholder="직접 입력 후 Enter" style="margin-top:8px">
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">사용 언어</label>
+        <div class="chip-row" id="lang-chips">
+          <div class="chip" data-lang="ko">한국어</div>
+          <div class="chip" data-lang="en">English</div>
+          <div class="chip" data-lang="zh">中文</div>
+          <div class="chip" data-lang="vi">Tiếng Việt</div>
+          <div class="chip" data-lang="ja">日本語</div>
+        </div>
+      </div>
+
+      <div class="section-title">위치</div>
+      <div class="field-group">
+        <label class="field-label">주소</label>
+        <div class="geo-box">
+          <input class="field" id="f-address" type="text" placeholder="예: 제주특별자치도 제주시 한림읍 ...">
+          <button class="geo-btn" id="btn-geo" type="button">📍 현재 위치</button>
+        </div>
+        <div class="geo-result" id="geo-result"></div>
+      </div>
+
+      <div class="section-title">연락처</div>
+      <div class="field-group">
+        <label class="field-label">전화번호 (선택)</label>
+        <input class="field" id="f-phone" type="tel" placeholder="010-0000-0000">
+      </div>
+      <div class="field-group">
+        <label class="field-label">웹사이트 / SNS (선택)</label>
+        <input class="field" id="f-website" type="text" placeholder="https://...">
+      </div>
+    </section>
+
+    <section id="step-3" class="hidden">
+      <div class="section-title">영업시간</div>
+      <div id="hours-list"></div>
+      <div class="field-hint" id="hours-hint">개인 프로필은 영업시간을 비워두셔도 됩니다.</div>
+
+      <div class="section-title">결제 수단</div>
+      <div class="toggle-row">
+        <div>
+          <div class="label">고팡 지갑(GDC) 결제 허용</div>
+          <div class="desc">활성화하면 GDC 기반 결제를 받을 수 있습니다. 끄면 신용카드·알리페이 등 외부 결제 수단을 안내합니다.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="f-gdc">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="section-title">공개 설정</div>
+      <div class="toggle-row">
+        <div>
+          <div class="label">검색·AI 비서에 노출</div>
+          <div class="desc">끄면 비공개 프로필로 전환되어 검색·추천에 노출되지 않습니다.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="f-public" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="label">전화번호 공개</div>
+          <div class="desc">켜면 프로필에 전화번호가 표시됩니다.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="f-phone-visible">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="section-title">계정 식별자</div>
+      <div class="identity-box" id="identity-box">확인 중…</div>
+    </section>
+  </main>
+
+  <div class="footer">
+    <button class="btn btn-secondary hidden" id="btn-prev">이전</button>
+    <button class="btn btn-primary" id="btn-next" disabled>다음</button>
+  </div>
+</div>
+
+<script>
+const WORKER_BASE = 'https://gopang-proxy.tensor-city.workers.dev';
+
+const state = {
+  step: 1,
+  entity_type: null,
+  tags: new Set(),
+  langs: new Set(['ko']),
+  hours: [
+    { day: 'mon', open: '09:00', close: '18:00', closed: false },
+    { day: 'tue', open: '09:00', close: '18:00', closed: false },
+    { day: 'wed', open: '09:00', close: '18:00', closed: false },
+    { day: 'thu', open: '09:00', close: '18:00', closed: false },
+    { day: 'fri', open: '09:00', close: '18:00', closed: false },
+    { day: 'sat', open: '09:00', close: '18:00', closed: false },
+    { day: 'sun', open: '09:00', close: '18:00', closed: true  },
+  ],
+  geo: { lat: null, lng: null },
+};
+
+const DAY_LABEL = { mon:'월', tue:'화', wed:'수', thu:'목', fri:'금', sat:'토', sun:'일' };
+const TAG_PRESETS = {
+  person:      ['프리랜서','학생','주민','거주자'],
+  business:    ['중화요리','한식','카페','숙박','소매','배달가능','주차가능'],
+  org:         ['협회','조합','동호회','비영리'],
+  institution: ['행정','의료','교육','복지','안전'],
+};
+
+function showStatus(msg, type) {
+  const box = document.getElementById('status-box');
+  box.textContent = msg;
+  box.className = 'status-msg show ' + (type || 'info');
+}
+function hideStatus() {
+  document.getElementById('status-box').className = 'status-msg';
+}
+
+// ── 경량 정체성 보강 ─────────────────────────────────────
+// gopangWallet은 /gopang-wallet.js 로드 시 키페어를 자동 생성하지만,
+// guid(ipv6) 연결은 localStorage.gopang_user_v3.ipv6 존재 여부에 달려 있다.
+// 시드/얼굴/지문 등록(B 시나리오)을 거치지 않은 사용자도 프로필을 등록할 수 있도록,
+// ipv6가 없으면 시드 없이 ipv6만 생성해 연결한다. (분실 시 복구 불가 — 안내 표시)
+async function _buildDeviceFingerprint() {
+  const raw = [
+    navigator.userAgent, navigator.language,
+    screen.width + 'x' + screen.height,
+    screen.colorDepth,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.hardwareConcurrency || '',
+    navigator.deviceMemory        || '',
+    screen.pixelDepth             || '',
+  ].join('|');
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function _buildIPv6Identity(fpHex) {
+  const groups = [];
+  for (let i = 0; i < 8; i++) groups.push(fpHex.slice(i*4, i*4+4));
+  groups[0] = '2601'; groups[1] = 'db80';
+  return groups.join(':');
+}
+
+async function ensureIdentity() {
+  let stored;
+  try { stored = JSON.parse(localStorage.getItem('gopang_user_v3') || 'null'); }
+  catch (e) { stored = null; }
+
+  if (!stored || !stored.ipv6) {
+    const fpHex = await _buildDeviceFingerprint();
+    const ipv6  = await _buildIPv6Identity(fpHex);
+    stored = {
+      ipv6, fpHex,
+      seedHex: null, faceVec: null,
+      authLevel: 'L0',
+      registeredAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+    };
+    localStorage.setItem('gopang_user_v3', JSON.stringify(stored));
+  }
+
+  // gopangWallet은 비동기 자동초기화 중일 수 있으므로 대기
+  for (let i = 0; i < 50; i++) {
+    if (window.gopangWallet) break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  if (!window.gopangWallet) throw new Error('지갑 초기화 실패 — 페이지를 새로고침해 주세요.');
+
+  if (!window.gopangWallet.guid) {
+    window.gopangWallet.setIdentity({ guid: stored.ipv6 });
+  }
+  return stored;
+}
+
+// ── Ed25519 서명 요청 빌더 ───────────────────────────────
+// payload(서명 대상 객체)에 signature를 추가해 반환한다.
+// 서버(_verifyEd25519)는 {signature, ...rest}에서 rest를 JSON.stringify하여 검증하므로
+// 키 순서가 보존되도록 동일한 객체 리터럴 순서를 그대로 사용한다.
+async function signRequest(payload) {
+  const wallet = window.gopangWallet;
+  const signature = await wallet.sign(JSON.stringify(payload));
+  return { ...payload, signature };
+}
+
+async function loadExistingProfile(guid) {
+  try {
+    const res = await fetch(`${WORKER_BASE}/profile?guid=${encodeURIComponent(guid)}`);
+    if (res.status === 404) return null;
+    const data = await res.json();
+    return data.ok ? data.profile : null;
+  } catch (e) { return null; }
+}
+
+function applyExistingProfile(p) {
+  if (!p) return;
+  if (p.entity_type) selectEntity(p.entity_type);
+  document.getElementById('f-name').value = p.name || '';
+  document.getElementById('f-address').value = p.address || '';
+  document.getElementById('f-phone').value = p.phone || '';
+  document.getElementById('f-website').value = p.website || '';
+  document.getElementById('f-public').checked = p.is_public !== false;
+
+  const pub = (p.extra && p.extra.public) || {};
+  if (pub.identity) {
+    document.getElementById('f-description').value = pub.identity.description || '';
+    (pub.identity.tags || []).forEach(function(t){ state.tags.add(t); });
+  }
+  if (pub.contact) {
+    document.getElementById('f-phone-visible').checked = !!pub.contact.phone_visible;
+    (pub.contact.languages_spoken || []).forEach(function(l){ state.langs.add(l); });
+  }
+  if (pub.finance) {
+    document.getElementById('f-gdc').checked = !!pub.finance.gdc_accepted;
+  }
+  if (pub.activity && pub.activity.hours && pub.activity.hours.length) {
+    state.hours = pub.activity.hours.map(function(h){
+      return { day: h.day, open: h.open || '09:00', close: h.close || '18:00', closed: !h.open };
+    });
+  }
+  renderTagChips();
+  renderLangChips();
+  renderHours();
+}
+
+function selectEntity(type) {
+  state.entity_type = type;
+  document.querySelectorAll('.entity-card').forEach(function(c){
+    c.classList.toggle('selected', c.dataset.type === type);
+  });
+  document.getElementById('btn-next').disabled = false;
+
+  const nameLabel = document.getElementById('name-label');
+  const hoursTitle = document.querySelector('#step-3 .section-title');
+  const hoursHint = document.getElementById('hours-hint');
+  const hoursList = document.getElementById('hours-list');
+
+  if (type === 'person') {
+    nameLabel.textContent = '이름 / 닉네임 *';
+    hoursTitle.textContent = '활동 시간 (선택)';
+    hoursHint.textContent = '개인 프로필은 영업시간을 비워두셔도 됩니다.';
+    hoursList.classList.add('hidden');
+  } else {
+    nameLabel.textContent = '이름 / 상호명 *';
+    hoursTitle.textContent = '영업시간';
+    hoursHint.textContent = '요일별 영업시간을 입력하세요. 휴무일은 "휴무"를 선택하세요.';
+    hoursList.classList.remove('hidden');
+  }
+
+  renderTagChips();
+}
+
+document.querySelectorAll('.entity-card').forEach(function(card){
+  card.addEventListener('click', function(){ selectEntity(card.dataset.type); });
+});
+
+function renderTagChips() {
+  const wrap = document.getElementById('tag-chips');
+  wrap.innerHTML = '';
+  const presets = TAG_PRESETS[state.entity_type] || [];
+  presets.forEach(function(tag){
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (state.tags.has(tag) ? ' selected' : '');
+    chip.textContent = tag;
+    chip.onclick = function(){
+      if (state.tags.has(tag)) state.tags.delete(tag); else state.tags.add(tag);
+      renderTagChips();
+    };
+    wrap.appendChild(chip);
+  });
+  [...state.tags].filter(function(t){ return presets.indexOf(t) === -1; }).forEach(function(tag){
+    const chip = document.createElement('div');
+    chip.className = 'chip selected';
+    chip.textContent = tag + ' ✕';
+    chip.onclick = function(){ state.tags.delete(tag); renderTagChips(); };
+    wrap.appendChild(chip);
+  });
+}
+
+document.getElementById('f-tag-custom').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const val = e.target.value.trim();
+    if (val) { state.tags.add(val); e.target.value = ''; renderTagChips(); }
+  }
+});
+
+function renderLangChips() {
+  document.querySelectorAll('#lang-chips .chip').forEach(function(chip){
+    chip.classList.toggle('selected', state.langs.has(chip.dataset.lang));
+  });
+}
+document.querySelectorAll('#lang-chips .chip').forEach(function(chip){
+  chip.addEventListener('click', function(){
+    const lang = chip.dataset.lang;
+    if (state.langs.has(lang) && state.langs.size > 1) state.langs.delete(lang);
+    else state.langs.add(lang);
+    renderLangChips();
+  });
+});
+renderLangChips();
+
+function renderHours() {
+  const list = document.getElementById('hours-list');
+  list.innerHTML = '';
+  state.hours.forEach(function(h, i){
+    const row = document.createElement('div');
+    row.className = 'hours-row' + (h.closed ? ' closed' : '');
+    row.innerHTML =
+      '<div class="day">' + DAY_LABEL[h.day] + '</div>' +
+      '<input type="time" value="' + h.open + '" data-i="' + i + '" data-f="open">' +
+      '<div class="sep">–</div>' +
+      '<input type="time" value="' + h.close + '" data-i="' + i + '" data-f="close">' +
+      '<div class="closed-toggle" data-i="' + i + '">' + (h.closed ? '휴무' : '영업') + '</div>';
+    list.appendChild(row);
+  });
+  list.querySelectorAll('input[type="time"]').forEach(function(inp){
+    inp.addEventListener('change', function(e){
+      const i = +e.target.dataset.i, f = e.target.dataset.f;
+      state.hours[i][f] = e.target.value;
+    });
+  });
+  list.querySelectorAll('.closed-toggle').forEach(function(el){
+    el.addEventListener('click', function(e){
+      const i = +e.target.dataset.i;
+      state.hours[i].closed = !state.hours[i].closed;
+      renderHours();
+    });
+  });
+}
+renderHours();
+
+document.getElementById('btn-geo').addEventListener('click', function(){
+  const btn = document.getElementById('btn-geo');
+  const resultEl = document.getElementById('geo-result');
+  if (!navigator.geolocation) {
+    resultEl.textContent = '이 기기는 위치 정보를 지원하지 않습니다.';
+    resultEl.classList.add('show');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '⏳ 위치 확인 중…';
+
+  navigator.geolocation.getCurrentPosition(function(pos){
+    const latitude = pos.coords.latitude, longitude = pos.coords.longitude;
+    state.geo.lat = latitude;
+    state.geo.lng = longitude;
+    fetch(WORKER_BASE + '/geocode?lat=' + latitude + '&lng=' + longitude)
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        const doc = data.documents && data.documents[0];
+        const addr = doc && ((doc.road_address && doc.road_address.address_name) || (doc.address && doc.address.address_name));
+        if (addr) {
+          document.getElementById('f-address').value = addr;
+          resultEl.textContent = '✅ 위치 확인됨: ' + addr;
+        } else {
+          resultEl.textContent = '좌표: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5) + ' (주소 변환 실패 — 직접 입력해 주세요)';
+        }
+        resultEl.classList.add('show');
+      })
+      .catch(function(){
+        resultEl.textContent = '좌표: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5) + ' (주소 변환 오류)';
+        resultEl.classList.add('show');
+      })
+      .finally(function(){
+        btn.disabled = false;
+        btn.textContent = '📍 현재 위치';
+      });
+  }, function(err){
+    resultEl.textContent = '위치 권한이 거부되었거나 가져올 수 없습니다 (' + err.message + ')';
+    resultEl.classList.add('show');
+    btn.disabled = false;
+    btn.textContent = '📍 현재 위치';
+  }, { enableHighAccuracy: true, timeout: 8000 });
+});
+
+const STEPS = 3;
+function updateDots() {
+  for (var i = 1; i <= STEPS; i++) {
+    const dot = document.getElementById('dot-' + i);
+    dot.classList.remove('active', 'done');
+    if (i < state.step) dot.classList.add('done');
+    if (i === state.step) dot.classList.add('active');
+  }
+}
+function showStep(n) {
+  for (var i = 1; i <= STEPS; i++) {
+    document.getElementById('step-' + i).classList.toggle('hidden', i !== n);
+  }
+  document.getElementById('btn-prev').classList.toggle('hidden', n === 1);
+  document.getElementById('btn-next').textContent = (n === STEPS) ? '등록 완료' : '다음';
+  updateDots();
+  if (n === 3) renderIdentityBox();
+}
+
+function renderIdentityBox() {
+  const box = document.getElementById('identity-box');
+  const wallet = window.gopangWallet;
+  if (!wallet || !wallet.guid) {
+    box.innerHTML = '⚠️ 계정 식별자를 확인할 수 없습니다. 페이지를 새로고침해 주세요.';
+    return;
+  }
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem('gopang_user_v3') || 'null'); } catch (e) {}
+  const hasSeed = !!(stored && stored.seedHex);
+  box.innerHTML =
+    '식별자(IPv6): <code>' + wallet.guid + '</code><br>' +
+    '공개키: <code>' + (wallet.publicKeyB64u || '').slice(0, 24) + '…</code>' +
+    (hasSeed ? '' :
+      '<div class="warn">⚠️ 이 계정은 4단어 시드가 설정되지 않았습니다. ' +
+      '기기를 변경하면 이 프로필에 다시 접근할 수 없습니다. ' +
+      '설정에서 4단어 시드를 등록해 두는 것을 권장합니다.</div>');
+}
+
+document.getElementById('btn-next').addEventListener('click', async function(){
+  hideStatus();
+  if (state.step === 1) {
+    if (!state.entity_type) return;
+    state.step = 2;
+    showStep(2);
+    return;
+  }
+  if (state.step === 2) {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { showStatus('이름/상호명을 입력해 주세요.', 'error'); return; }
+    state.step = 3;
+    showStep(3);
+    return;
+  }
+  if (state.step === 3) {
+    await submitProfile();
+  }
+});
+
+document.getElementById('btn-prev').addEventListener('click', function(){
+  hideStatus();
+  state.step = Math.max(1, state.step - 1);
+  showStep(state.step);
+});
+
+async function submitProfile() {
+  const btn = document.getElementById('btn-next');
+  btn.disabled = true;
+  btn.textContent = '등록 중…';
+  hideStatus();
+
+  try {
+    await ensureIdentity();
+    const wallet = window.gopangWallet;
+
+    const payload = {
+      guid: wallet.guid,
+      pubkey: wallet.publicKeyB64u,
+      entity_type: state.entity_type,
+      name: document.getElementById('f-name').value.trim(),
+      description: document.getElementById('f-description').value.trim(),
+      tags: [...state.tags],
+      native_lang: [...state.langs][0] || 'ko',
+      languages_spoken: [...state.langs],
+      address: document.getElementById('f-address').value.trim(),
+      lat: state.geo.lat,
+      lng: state.geo.lng,
+      phone: document.getElementById('f-phone').value.trim() || null,
+      website: document.getElementById('f-website').value.trim(),
+      is_public: document.getElementById('f-public').checked,
+      hours: (state.entity_type === 'person')
+        ? []
+        : state.hours.map(function(h){ return { day: h.day, open: h.closed ? null : h.open, close: h.closed ? null : h.close }; }),
+      gdc_accepted: document.getElementById('f-gdc').checked,
+      currencies: document.getElementById('f-gdc').checked ? ['GDC','KRW'] : ['KRW'],
+      phone_visible: document.getElementById('f-phone-visible').checked,
+    };
+
+    const signedBody = await signRequest(payload);
+
+    const res = await fetch(WORKER_BASE + '/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(signedBody),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.detail || '저장 실패');
+
+    showStatus('✅ 프로필이 등록되었습니다. (handle: ' + (data.profile && data.profile.handle || '-') + ')', 'success');
+    btn.textContent = '완료';
+    setTimeout(function(){
+      const handle = data.profile && data.profile.handle;
+      if (handle) location.href = '/profile.html?handle=' + encodeURIComponent(handle);
+    }, 1200);
+  } catch (e) {
+    showStatus('저장 실패: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '등록 완료';
+  }
+}
+
+(async function init(){
+  try {
+    const stored = await ensureIdentity();
+    const wallet = window.gopangWallet;
+    const existing = await loadExistingProfile(wallet.guid);
+    if (existing) {
+      showStatus('기존 프로필 정보를 불러왔습니다. 수정 후 다시 등록할 수 있습니다.', 'info');
+      applyExistingProfile(existing);
+    }
+  } catch (e) {
+    showStatus(e.message, 'error');
+  }
+  showStep(1);
+})();
+</script>
+</body>
+</html>
