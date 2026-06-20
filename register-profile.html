@@ -356,6 +356,101 @@ async function signRequest(payload) {
   return { ...payload, signature };
 }
 
+// ── PDV 백업 (Layer A) ──────────────────────────────────
+// 시드(seedHex)가 있는 사용자만 대상. 시드 생성 자체는 이 파일의 책임이 아니며
+// "설정" 페이지에서 처리됨 (renderIdentityBox의 안내 문구 참조).
+// 필요한 외부 API(window.PDV.exportAll, window.gopangWallet.verifyChain)가
+// 아직 없을 수 있으므로, 존재 여부를 먼저 확인하고 없으면 조용히 스킵한다.
+// 잘못된 형태의 데이터로 pdv_backup 테이블을 오염시키는 것보다 안전.
+async function _deriveBackupKey(seedHex) {
+  const seedBytes = new Uint8Array(
+    seedHex.match(/.{1,2}/g).map(function(b){ return parseInt(b, 16); })
+  );
+  const baseKey = await crypto.subtle.importKey('raw', seedBytes, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256',
+      salt: new TextEncoder().encode('gopang-pdv-backup-v1'),
+      info: new TextEncoder().encode('AES-GCM-256') },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
+}
+
+function _b64(bytes) {
+  return btoa(String.fromCharCode.apply(null, bytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function triggerPdvBackupIfReady() {
+  try {
+    let stored;
+    try { stored = JSON.parse(localStorage.getItem('gopang_user_v3') || 'null'); }
+    catch (e) { stored = null; }
+    if (!stored || !stored.seedHex) {
+      console.log('[PDV백업] 시드 없음 — 스킵 (설정에서 시드 등록 후 자동 백업됨)');
+      return;
+    }
+
+    // 필수 외부 API 존재 확인 — 없으면 절대 호출하지 않음
+    if (!window.PDV || typeof window.PDV.exportAll !== 'function') {
+      console.warn('[PDV백업] window.PDV.exportAll() 없음 — pdv.js 연동 확인 필요. 스킵.');
+      return;
+    }
+    if (!window.gopangWallet || typeof window.gopangWallet.verifyChain !== 'function') {
+      console.warn('[PDV백업] gopangWallet.verifyChain() 없음 — 체인 앵커 확인 불가. 스킵.');
+      return;
+    }
+
+    const pdvData = await window.PDV.exportAll();
+    const chainInfo = await window.gopangWallet.verifyChain();
+    if (!chainInfo || !chainInfo.valid) {
+      console.warn('[PDV백업] 해시체인 검증 실패 — 백업 보류.');
+      return;
+    }
+    if (typeof chainInfo.height !== 'number' || !chainInfo.lastHash) {
+      console.warn('[PDV백업] verifyChain() 반환값에 height/lastHash 없음 — API 형태 확인 필요. 스킵.');
+      return;
+    }
+
+    const key = await _deriveBackupKey(stored.seedHex);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(pdvData));
+    const ciphertextBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, plaintext);
+    const ciphertextBytes = new Uint8Array(ciphertextBuf);
+    const sha256Buf = await crypto.subtle.digest('SHA-256', ciphertextBytes);
+    const sha256Hex = Array.from(new Uint8Array(sha256Buf))
+      .map(function(b){ return b.toString(16).padStart(2, '0'); }).join('');
+
+    const payload = {
+      guid: window.gopangWallet.guid,
+      encrypted_blob: _b64(ciphertextBytes),
+      iv: _b64(iv),
+      blob_sha256: sha256Hex,
+      chain_height: chainInfo.height,
+      chain_local_hash: chainInfo.lastHash,
+      device_label: navigator.userAgent.slice(0, 60),
+    };
+    const signedBody = await signRequest(payload);
+
+    const res = await fetch(WORKER_BASE + '/pdv/backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(signedBody),
+    });
+    const data = await res.json();
+    if (data && data.ok) {
+      console.log('[PDV백업] 완료 — height:', chainInfo.height);
+    } else {
+      console.warn('[PDV백업] 서버 응답 실패:', data && data.detail);
+    }
+  } catch (e) {
+    // 백업 실패가 프로필 등록 흐름을 막아서는 안 됨 — 조용히 기록만
+    console.warn('[PDV백업] 예외 발생, 등록 흐름에는 영향 없음:', e.message);
+  }
+}
+
 async function loadExistingProfile(guid) {
   try {
     const res = await fetch(`${WORKER_BASE}/profile?guid=${encodeURIComponent(guid)}`);
@@ -656,6 +751,7 @@ async function submitProfile() {
 
     showStatus('✅ 프로필이 등록되었습니다. (handle: ' + (data.profile && data.profile.handle || '-') + ')', 'success');
     btn.textContent = '완료';
+    triggerPdvBackupIfReady(); // 비차단 — 등록 흐름과 독립적으로 실행, 실패해도 무관
     setTimeout(function(){
       const handle = data.profile && data.profile.handle;
       if (handle) location.href = '/profile.html?handle=' + encodeURIComponent(handle);
