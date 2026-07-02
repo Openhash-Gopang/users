@@ -1,6 +1,6 @@
 -- ================================================================
 -- gduda_readiness.sql
--- GDUDA 전환 준비 — users.gopang.net Phase 1 사전 작업
+-- GDUDA 전환 준비 — users.hondi.net Phase 1 사전 작업
 -- Supabase SQL Editor에 그대로 붙여넣기용
 --
 -- 기존 테이블 수정 원칙:
@@ -416,7 +416,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION search_entities IS
-  'users.gopang.net 엔티티 통합 검색 RPC v2.1.
+  'users.hondi.net 엔티티 통합 검색 RPC v2.1.
    기존 파라미터 완전 하위 호환.
    GDUDA 추가: p_l1_node, p_l2_node, p_primary_guid.
    반환: primary_guid, current_ipv6, l1_node 추가.

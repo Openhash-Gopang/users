@@ -1,6 +1,6 @@
 ================================================================
 SP-USERS-v2_1.txt
-Gopang users.gopang.net — Entity Search & Resolution Agent
+Gopang users.hondi.net — Entity Search & Resolution Agent
 System Prompt v2.1
 Gopang Address System (GAS) v1.6 완전 준수
 ================================================================
@@ -539,7 +539,7 @@ STEP 12 — 금지 행위 (Hard Rules)
 ================================================================
 
 SP-ID         : SP-USERS-v2_1
-대상 서비스    : users.gopang.net
+대상 서비스    : users.hondi.net
 프로토콜       : GAS v1.6 / GWP v4.x
 DB             : Supabase ebbecjfrwaswbdybbgiu.supabase.co
 

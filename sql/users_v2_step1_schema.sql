@@ -1,5 +1,5 @@
 -- =============================================================
--- users.gopang.net  Schema Migration  v2.0 → v2.2
+-- users.hondi.net  Schema Migration  v2.0 → v2.2
 -- Step 1: 테이블 구조 변경 및 신규 테이블 생성
 -- 참조: Gopang Auth & Discovery v2.2 §16, §17, §13.6, §14.4, §15
 -- 실행 순서: 이 파일 전체를 Supabase SQL Editor에서 한 번에 실행

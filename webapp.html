@@ -468,7 +468,7 @@
       align-self: flex-end;
 <script>
 // ════════════════════════════════════════════════════════════
-// users.gopang.net — webapp.html v2.1 (모바일)
+// users.hondi.net — webapp.html v2.1 (모바일)
 // 변경: 실제 DB(user_profiles 기반) + ctx 수신
 //       SP-USERS-v2_0 / AI 채팅은 Worker /ai/chat (기존)
 //       검색·is_public은 Supabase REST 직접 호출 (Worker 수정 없음)
@@ -504,7 +504,7 @@ window._onGopangAuth = function(user) {
 
 /* ── GWP 메시지 수신 (SUBSYSTEM이 postMessage로 쿼리 전달) ── */
 window.addEventListener('message', e => {
-  if (e.origin !== 'https://gopang.net') return;
+  if (e.origin !== 'https://hondi.net') return;
   if (e.data?.type === 'GOPANG_SEARCH') {
     document.getElementById('chat-input').value = e.data.query || '';
     showScreen('chat');
@@ -815,10 +815,10 @@ function doConnect(guid, name, type) {
     caller_echo: callerCtx?.caller || 'users-webapp',
   };
   if (window.opener) {
-    window.opener.postMessage(payload, 'https://gopang.net');
+    window.opener.postMessage(payload, 'https://hondi.net');
     setTimeout(() => window.close(), 700);
   } else {
-    window.open(`https://gopang.net/?connect=${encodeURIComponent(guid)}`, '_blank');
+    window.open(`https://hondi.net/?connect=${encodeURIComponent(guid)}`, '_blank');
   }
 }
 
@@ -981,7 +981,7 @@ function getDummy(q) {
   }
 })();
 </script>
-<script type="module" src="https://gopang.net/auth/subsystem-auth.js"
+<script type="module" src="https://hondi.net/auth/subsystem-auth.js"
   onerror="console.warn('[auth] subsystem-auth.js 로드 실패')"></script>
 </body>
 </html>

@@ -357,8 +357,8 @@ html,body{
 ═══════════════════════════════════════════════════════ */
 
 const PROXY_BASE    = 'https://gopang-proxy.tensor-city.workers.dev';
-const GOPANG_ORIGIN  = 'https://gopang.net';
-const MARKET_ORIGIN  = 'https://market.gopang.net';
+const GOPANG_ORIGIN  = 'https://hondi.net';
+const MARKET_ORIGIN  = 'https://market.hondi.net';
 
 /* ── URL 파라미터 파싱 ── */
 const params    = new URLSearchParams(location.search);
@@ -692,7 +692,7 @@ function requestSign() {
   };
 
   if (window.opener && !window.opener.closed) {
-    // opener의 실제 origin으로 전송 (market.gopang.net 또는 gopang.net 모두 대응)
+    // opener의 실제 origin으로 전송 (market.hondi.net 또는 hondi.net 모두 대응)
     // targetOrigin: URL 파라미터로 전달된 opener origin 사용
     window.opener.postMessage({ type: 'GWP_SIGN_REQUEST', tx }, OPENER_ORIGIN);
     // profile은 GWP_DONE 전송 후 자동 닫힘 (showDone → 3초 후 window.close)
@@ -701,7 +701,7 @@ function requestSign() {
     const ctx = btoa(unescape(encodeURIComponent(
       `${p.name} 주문: ${items.map(i=>`${i.name}×${i.quantity}`).join(', ')} 합계 ₩${total.toLocaleString()}`
     )));
-    window.location.href = `https://gopang.net/?gwp=1&ctx=${ctx}&ctx_enc=b64`;
+    window.location.href = `https://hondi.net/?gwp=1&ctx=${ctx}&ctx_enc=b64`;
   }
 }
 
@@ -716,9 +716,9 @@ function resetPayBtn() {
    5. GWP_SIGN_RESPONSE 수신 → /biz/order POST
 ═══════════════════════════════════════════════════════ */
 window.addEventListener('message', async (e) => {
-  // gopang.net 계열 origin 전체 허용
-  const allowed = ['https://gopang.net', 'https://market.gopang.net',
-                   'https://users.gopang.net'];
+  // hondi.net 계열 origin 전체 허용
+  const allowed = ['https://hondi.net', 'https://market.hondi.net',
+                   'https://users.hondi.net'];
   if (!allowed.includes(e.origin)) return;
   const { type, signedTx, session_id, success, error: signError } = e.data || {};
   if (type !== 'GWP_SIGN_RESPONSE') return;

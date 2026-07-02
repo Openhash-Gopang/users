@@ -1,5 +1,5 @@
 -- =============================================================
--- users.gopang.net  RPC Migration  v2.0 → v2.2
+-- users.hondi.net  RPC Migration  v2.0 → v2.2
 -- Step 2: search_entities 개정 + search_by_attributes 신규 생성
 -- 참조: Gopang Auth & Discovery v2.2 §13, §14, §16, §17
 -- 최종 수정: nickname_cache LATERAL JOIN 방식 (항상 handle 반환)

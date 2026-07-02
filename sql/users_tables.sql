@@ -1,6 +1,6 @@
 -- ================================================================
 -- users_tables.sql
--- users.gopang.net 전용 신규 테이블 + RPC + Worker 엔드포인트
+-- users.hondi.net 전용 신규 테이블 + RPC + Worker 엔드포인트
 -- 기존 테이블(users, user_profiles, seller_ratings,
 --             location_log, inventory 등) 수정 없음
 -- 작성: AI City Inc. 팀 주피터 / 2026-06
@@ -220,7 +220,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION search_entities IS
-  'users.gopang.net 엔티티 통합 검색 RPC.
+  'users.hondi.net 엔티티 통합 검색 RPC.
    기존 테이블(user_profiles, seller_ratings, location_log)을
    LEFT JOIN하여 거리·평점·신뢰등급 정렬을 지원한다.';
 
@@ -244,7 +244,7 @@ COMMENT ON FUNCTION search_entities IS
 
 ──────────────────────────────────────────────────────────────────
 [ALLOWED_ORIGINS 에 추가]
-    'https://users.gopang.net',
+    'https://users.hondi.net',
 
 ──────────────────────────────────────────────────────────────────
 [핸들러 함수 — worker.js 파일 끝에 추가]
