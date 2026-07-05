@@ -880,7 +880,7 @@ input,textarea,select{font-family:'Inter',sans-serif}
 //       postMessage origin 고정 (보안)
 // ════════════════════════════════════════════════════════════
 
-const PROXY        = 'https://gopang-proxy.tensor-city.workers.dev';
+const PROXY        = 'https://hondi-proxy.tensor-city.workers.dev';
 const SP_URL       = 'https://raw.githubusercontent.com/Openhash-Gopang/users/main/SP-USERS-v2_0.txt';
 const SB_URL       = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
 const SB_KEY       = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
@@ -1190,7 +1190,7 @@ function rowClick(guid) {
 
 /* ── PDV 페이지 열기 — Worker /pdv/page/ 경유 ── */
 function openPdv(primaryGuid) {
-  const WORKER = 'https://gopang-proxy.tensor-city.workers.dev';
+  const WORKER = 'https://hondi-proxy.tensor-city.workers.dev';
   window.open(`${WORKER}/pdv/page/${encodeURIComponent(primaryGuid)}`, '_blank',
     'width=600,height=700,noopener');
 }
