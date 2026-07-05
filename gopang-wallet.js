@@ -25,7 +25,7 @@
   const LS_PUBKEY        = 'gopang_wallet_pubkey';
   const LS_HANDLE        = 'gopang_wallet_handle';
   const SUPABASE_URL     = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
-  const WORKER_URL       = 'https://gopang-proxy.tensor-city.workers.dev';
+  const WORKER_URL       = 'https://hondi-proxy.tensor-city.workers.dev';
 
   /* ────────────────────────────────────────────────
    *  유틸리티
