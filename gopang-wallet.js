@@ -1,4 +1,4 @@
-/**
+﻿/**
  * gopang-wallet.js — Gopang 클라이언트 지갑 공통 모듈
  * Version  : 1.0.0
  * Spec     : GDUDA 5-Layer / OpenHash L1
@@ -17,14 +17,20 @@
    * ──────────────────────────────────────────────── */
   const VERSION          = '2.0.0';
   const IDB_NAME         = 'gopang-wallet';
-  const IDB_VER          = 2;               // v2.0: hash_chain store 추가
+  const IDB_VER          = 3;               // v3.0: hash_chain → anchor_chain (OpenHash 통합)
   const IDB_STORE        = 'keys';           // 개인키·재무상태 저장
-  const IDB_STORE_CHAIN  = 'hash_chain';     // Hash Chain 이력 저장 (keys와 분리)
+  const IDB_STORE_CHAIN  = 'anchor_chain';   // OpenHash 통합 앵커 체인 (v3.0)
   const IDB_KEY_ID       = 'ed25519-main';
+  const IDB_X25519_ID    = 'x25519-enc-main';  // 암호화 전용 키페어 (Ed25519와 별도)
   const IDB_FS_KEY       = 'financial_state'; // 로컬 재무제표 키
   const LS_PUBKEY        = 'gopang_wallet_pubkey';
+  const LS_X25519_PUBKEY = 'gopang_wallet_x25519_pubkey';
   const LS_HANDLE        = 'gopang_wallet_handle';
-  const SUPABASE_URL     = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
+  const LS_WEBAUTHN_CRED = 'gopang_wallet_webauthn_cred_id';
+  const WEBAUTHN_RP_ID   = 'hondi.net';  // 전체 hondi.net 서브도메인에서 credential 공유
+  // PRF는 결정론적 — 동일 salt + 동일 authenticator = 항상 동일 32바이트.
+  // 서버에 아무것도 저장할 필요 없음.
+  const WEBAUTHN_PRF_SALT = new TextEncoder().encode('gopang-wallet-v1-prf-salt');
   const WORKER_URL       = 'https://hondi-proxy.tensor-city.workers.dev';
 
   /* ────────────────────────────────────────────────
@@ -80,8 +86,13 @@
         const oldVer  = e.oldVersion;
         // v1: keys store
         if (oldVer < 1) db.createObjectStore(IDB_STORE);
-        // v2: hash_chain store (keys와 완전 분리)
-        if (oldVer < 2) db.createObjectStore(IDB_STORE_CHAIN, { keyPath: 'height' });
+        // v2: hash_chain store (구버전 — v3에서 교체)
+        if (oldVer < 2) db.createObjectStore('hash_chain', { keyPath: 'height' });
+        // v3: anchor_chain (OpenHash 통합 — keyPath: entryHash)
+        if (oldVer < 3) {
+          if (db.objectStoreNames.contains('hash_chain')) db.deleteObjectStore('hash_chain');
+          db.createObjectStore(IDB_STORE_CHAIN, { keyPath: 'entryHash' });
+        }
       };
       req.onsuccess = e => resolve(e.target.result);
       req.onerror   = e => reject(e.target.error);
@@ -100,11 +111,17 @@
 
   async function idbChainGetLast(db) {
     return new Promise((resolve, reject) => {
-      const tx     = db.transaction(IDB_STORE_CHAIN, 'readonly');
-      const store  = tx.objectStore(IDB_STORE_CHAIN);
-      const req    = store.openCursor(null, 'prev'); // 내림차순 → 최신
-      req.onsuccess = e => resolve(e.target.result?.value ?? null);
-      req.onerror   = e => reject(e.target.error);
+      const tx    = db.transaction(IDB_STORE_CHAIN, 'readonly');
+      const store = tx.objectStore(IDB_STORE_CHAIN);
+      // keyPath='entryHash' → getAll 후 recorded_at 기준 최신 조회
+      const req   = store.getAll();
+      req.onsuccess = e => {
+        const all = e.target.result || [];
+        if (!all.length) { resolve(null); return; }
+        all.sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
+        resolve(all[0]);
+      };
+      req.onerror = e => reject(e.target.error);
     });
   }
 
@@ -244,6 +261,107 @@
       : payload;
     const sig = b64uToBuf(signatureB64u);
     return crypto.subtle.verify('Ed25519', pubKey, sig, data);
+  }
+
+  /* ────────────────────────────────────────────────
+   *  X25519 암호화 전용 키페어 (Ed25519와 별도)
+   *  용도: PC가 입력한 민감정보(API Key 등)를 이 공개키로
+   *        봉투 암호화 → Supabase에는 암호문만 저장
+   *        복호화는 이 키페어를 보관한 기기(휴대폰)에서만 가능
+   * ──────────────────────────────────────────────── */
+
+  /**
+   * 새 X25519 키페어 생성 (암호화 전용 — 서명 불가)
+   * @returns {{ publicKey, privateKey, publicKeyB64u, privateKeyB64u }}
+   */
+  async function generateX25519KeyPair() {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'X25519' },
+      true,
+      ['deriveKey', 'deriveBits']
+    );
+    const pubRaw  = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+    const privJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+
+    return {
+      publicKey     : keyPair.publicKey,
+      privateKey    : keyPair.privateKey,
+      publicKeyB64u : bufToB64u(pubRaw),
+      privateKeyB64u: privJwk.d,
+    };
+  }
+
+  /**
+   * ECDH(X25519) 공유키 유도 → AES-GCM 256 CryptoKey
+   * @param {CryptoKey} privateKey  — 내 X25519 개인키
+   * @param {CryptoKey} peerPublicKey — 상대 X25519 공개키
+   */
+  async function _deriveSharedAesKey(privateKey, peerPublicKey) {
+    return crypto.subtle.deriveKey(
+      { name: 'X25519', public: peerPublicKey },
+      privateKey,
+      { name: 'AES-GCM', length: 256 },
+      false, ['encrypt', 'decrypt']
+    );
+  }
+
+  /**
+   * 봉투 암호화 — PC가 휴대폰의 X25519 공개키로 평문을 암호화
+   * 송신자(PC)는 매번 임시(ephemeral) 키페어를 새로 생성하므로
+   * 송신자 쪽에 개인키를 보관할 필요가 없음 (PC는 거울일 뿐)
+   *
+   * @param {string} recipientPubKeyB64u — 수신자(휴대폰)의 X25519 공개키
+   * @param {string} plaintext
+   * @returns {{ ephemeralPubKey, iv, ciphertext }} 전부 Base64URL
+   */
+  async function sealForRecipient(recipientPubKeyB64u, plaintext) {
+    const recipientPubKey = await crypto.subtle.importKey(
+      'raw', b64uToBuf(recipientPubKeyB64u),
+      { name: 'X25519' }, false, []
+    );
+
+    // 송신자(PC) 측 1회용 임시 키페어 — PC에는 절대 저장하지 않음
+    const ephemeral = await crypto.subtle.generateKey(
+      { name: 'X25519' }, true, ['deriveKey']
+    );
+    const aesKey = await crypto.subtle.deriveKey(
+      { name: 'X25519', public: recipientPubKey },
+      ephemeral.privateKey,
+      { name: 'AES-GCM', length: 256 },
+      false, ['encrypt']
+    );
+
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const enc = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv }, aesKey,
+      new TextEncoder().encode(plaintext)
+    );
+    const ephemeralPubRaw = await crypto.subtle.exportKey('raw', ephemeral.publicKey);
+
+    return {
+      ephemeralPubKey: bufToB64u(ephemeralPubRaw),
+      iv             : bufToB64u(iv),
+      ciphertext     : bufToB64u(enc),
+    };
+  }
+
+  /**
+   * 봉투 복호화 — 휴대폰이 자신의 X25519 개인키로 PC가 보낸 암호문을 해독
+   * @param {CryptoKey} myPrivateKey
+   * @param {{ ephemeralPubKey, iv, ciphertext }} sealed
+   * @returns {string} plaintext
+   */
+  async function openSealed(myPrivateKey, sealed) {
+    const ephemeralPubKey = await crypto.subtle.importKey(
+      'raw', b64uToBuf(sealed.ephemeralPubKey),
+      { name: 'X25519' }, false, []
+    );
+    const aesKey = await _deriveSharedAesKey(myPrivateKey, ephemeralPubKey);
+    const dec = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: b64uToBuf(sealed.iv) },
+      aesKey, b64uToBuf(sealed.ciphertext)
+    );
+    return new TextDecoder().decode(dec);
   }
 
   /* ────────────────────────────────────────────────
@@ -400,32 +518,63 @@
     pdvSessionId = null,
     pdvType      = null,
   }) {
-    const last          = await idbChainGetLast(db);
-    const height        = (last?.height ?? -1) + 1;
-    const prevLocalHash = last?.local_hash ?? '0'.repeat(64);
+    // ── v3.0: OpenHash anchor() 위임 (단일 체인 통합) ──────────────────
+    // hashChain.js의 anchor()를 통해 단일 앵커 체인에 기록
+    // contentHash = SHA-256(txHash + blockHash) — 거래 식별자
+    // signatures  = [] → guid fallback (wallet 컨텍스트에서 서명)
+    try {
+      const { anchor } = await import('./src/openhash/hashChain.js');
+      const contentInput = txHash + (blockHash || '');
+      const buf         = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(contentInput));
+      const contentHash = bufToHex(buf);
 
-    // 공식 불변 (v3.0 확정)
-    // h_i = SHA-256(h_{i-1} ∥ tx_hash ∥ block_hash ∥ height)
-    const chainInput = prevLocalHash + txHash + blockHash + String(height);
-    const localHash  = bufToHex(await sha256(chainInput));
+      // wallet 서명 (this 컨텍스트 없으므로 window.gopangWallet 사용)
+      let sig = contentHash;  // fallback
+      try {
+        if (window.gopangWallet?._privKey) {
+          const sigBuf = await crypto.subtle.sign('Ed25519', window.gopangWallet._privKey, new TextEncoder().encode(contentHash));
+          sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+        }
+      } catch(e) { /* fallback 유지 */ }
 
-    const record = {
-      height,
-      local_hash:      localHash,
-      prev_local_hash: prevLocalHash,
-      tx_hash:         txHash,
-      block_hash:      blockHash,
-      block_id:        blockId,
-      recorded_at:     new Date().toISOString(),
-      pdv_session_id:  pdvSessionId,
-      pdv_type:        pdvType,
-      pdv_anchored:    false,
-      // prev_settle_hash: @deprecated — 제거됨
-      // new_settle_hash:  @deprecated — 제거됨
-    };
+      const result = await anchor(contentHash, [sig], pdvSessionId || txHash);
 
-    await idbChainPut(db, record);
-    return record;
+      // anchor_chain store에 저장 (OpenHash 통합 레코드)
+      const record = {
+        entryHash:     result.entryHash,
+        contentHash,
+        prevHash:      result.prevHash,
+        tx_hash:       txHash,
+        block_hash:    blockHash,
+        block_id:      blockId,
+        layer:         result.layer,
+        recorded_at:   new Date().toISOString(),
+        pdv_session_id: pdvSessionId,
+        pdv_type:      pdvType,
+      };
+      await idbChainPut(db, record);
+      return record;
+    } catch(e) {
+      console.warn('[Wallet] appendHashChain anchor() 실패, 로컬 기록만:', e.message);
+      // fallback: anchor() 실패 시 로컬만 기록
+      const contentInput = txHash + (blockHash || '');
+      const buf         = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(contentInput));
+      const contentHash = bufToHex(buf);
+      const record = {
+        entryHash:     contentHash,
+        contentHash,
+        prevHash:      '0'.repeat(64),
+        tx_hash:       txHash,
+        block_hash:    blockHash,
+        block_id:      blockId,
+        layer:         'local',
+        recorded_at:   new Date().toISOString(),
+        pdv_session_id: pdvSessionId,
+        pdv_type:      pdvType,
+      };
+      await idbChainPut(db, record);
+      return record;
+    }
   }
 
   /* ────────────────────────────────────────────────
@@ -434,17 +583,21 @@
 
   class GopangWallet {
 
-    constructor({ publicKey, privateKey, publicKeyB64u, publicKeyHex, handle, guid }) {
+    constructor({ publicKey, privateKey, publicKeyB64u, publicKeyHex, handle, guid, x25519PublicKey, x25519PrivateKey, x25519PublicKeyB64u }) {
       this._pubKey     = publicKey;
       this._privKey    = privateKey;
       this.publicKeyB64u = publicKeyB64u;
       this.publicKeyHex  = publicKeyHex;
       this.handle      = handle ?? null;   // @닉네임#태그
       this.guid        = guid   ?? null;   // user_profiles.current_ipv6
+      // X25519 암호화 전용 키페어 (Ed25519와 별도 — PC→휴대폰 봉투암호화 수신용)
+      this._x25519PrivKey   = x25519PrivateKey ?? null;
+      this._x25519PubKey    = x25519PublicKey  ?? null;
+      this.x25519PublicKeyB64u = x25519PublicKeyB64u ?? null;
     }
 
-    /* ── 서명 ── */
-    async sign(payload) {
+    /* ── 서명 (단순 문자열/바이트 페이로드 — TX 빌드와 무관) ── */
+    async signPayload(payload) {
       return sign(this._privKey, payload);
     }
 
@@ -459,6 +612,18 @@
       return verify(this.publicKeyB64u, payload, signatureB64u);
     }
 
+    /* ── X25519: 이 지갑(휴대폰)이 PC로부터 받은 봉투를 해독 ── */
+    async openSealed(sealed) {
+      if (!this._x25519PrivKey)
+        throw new Error('wallet: X25519 키페어가 아직 등록되지 않았습니다. ensureX25519Key()를 먼저 호출하세요.');
+      return openSealed(this._x25519PrivKey, sealed);
+    }
+
+    /* ── X25519 공개키 보유 여부 ── */
+    hasX25519Key() {
+      return !!this._x25519PubKey;
+    }
+
     /* ── handle / guid 설정 ── */
     setIdentity({ handle, guid }) {
       if (handle) {
@@ -468,22 +633,11 @@
       if (guid) this.guid = guid;
     }
 
-    /* ── Supabase 공개키 등록 (Worker 경유) ── */
-    async registerPublicKey(anonKey) {
-      if (!this.guid) throw new Error('wallet: guid가 없습니다.');
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?current_ipv6=eq.${this.guid}`, {
-        method : 'PATCH',
-        headers: {
-          'Content-Type' : 'application/json',
-          'apikey'       : anonKey,
-          'Authorization': `Bearer ${anonKey}`,
-          'Prefer'       : 'return=minimal',
-        },
-        body: JSON.stringify({ pubkey_ed25519: this.publicKeyB64u }),
-      });
-      if (!res.ok) throw new Error(`공개키 등록 실패: ${res.status}`);
-      return true;
-    }
+    // (2026-07-15 삭제 — registerPublicKey. Supabase user_profiles에
+    //  직접 PATCH하던 옛날 방식이고, 지금은 handleProfilePost/
+    //  _l1UpsertProfile(L1 기반)이 공개키 등록을 대신한다. gopang·gdc
+    //  두 저장소 어디서도 이 메서드를 호출하는 곳이 없었다 — Supabase
+    //  완전 폐기의 마지막 잔재라 정리한다.)
 
     /* ── 지갑 정보 요약 ── */
     summary() {
@@ -610,25 +764,40 @@
       const now = Date.now();
       let applied = 0;
       for (const claim of claims) {
+        // 2026-07-07 수정(실제 이중 계상 버그): 이 필터가 없었다 — GWP_DONE
+        // 메시지에는 buyer_claim/seller_claim이 함께 실려 오는데(profile.html
+        // _submitOrder 참고), 그동안 이 함수가 claimant 확인 없이 배열의
+        // 모든 claim을 그대로 적용해서, 구매자의 로컬 재무제표에 판매자
+        // 몫(seller_claim)까지 잘못 반영되고 있었다. claimant가 없는 옛날
+        // claim(하위호환)은 그대로 허용한다.
+        if (claim.claimant && this.guid && claim.claimant !== this.guid) {
+          console.warn('[Wallet] 내 claim 아님, 건너뜀:', claim.claimant?.slice(0, 20));
+          continue;
+        }
         if (claim.expires_at && new Date(claim.expires_at).getTime() < now) {
           console.warn('[Wallet] 만료된 청구권 무시:', claim);
           continue;
         }
         const acc = claim.fs_account || 'bs-cash';
         const cur = parseFloat(fs[acc] ?? '0') || 0;
+        // 2026-07-13 신설 — pl-cogs(매출원가)는 실제 현금 흐름이 아니라,
+        // 이미 매입 시점(pl-purchase)에 지출된 현금을 사후적으로 매출과
+        // 대응시키는 정보성 재분류일 뿐이다. bs-cash를 또 건드리면 같은
+        // 지출을 두 번 차감하는 이중계상이 된다 — 반드시 제외해야 한다.
+        const NON_CASH_ACCOUNTS = new Set(['pl-cogs']);
         if (claim.direction === 'credit') {
           fs[acc] = cur + (claim.amount || 0);
         } else if (claim.direction === 'debit') {
-          // pl-purchase: 누적 지출액(양수) — cur + amount
+          // pl-purchase·pl-cogs: 누적 비용(양수) — cur + amount
           // bs-cash: 잔액 감소 — 별도 처리
-          if (acc === 'pl-purchase') {
+          if (acc === 'pl-purchase' || acc === 'pl-cogs') {
             fs[acc] = cur + (claim.amount || 0);
           } else {
             fs[acc] = cur - (claim.amount || 0);
           }
         }
-        // bs-cash 동기화 (pl 계정 변동 시)
-        if (acc !== 'bs-cash') {
+        // bs-cash 동기화 (pl 계정 변동 시) — 비현금 계정은 제외
+        if (acc !== 'bs-cash' && !NON_CASH_ACCOUNTS.has(acc)) {
           const bsCash = parseFloat(fs['bs-cash'] ?? '0') || 0;
           if (claim.direction === 'credit') fs['bs-cash'] = bsCash + (claim.amount || 0);
           else                              fs['bs-cash'] = bsCash - (claim.amount || 0);
@@ -662,13 +831,69 @@
     }
 
     /**
+     * 2026-07-07 신설 — 재대사(reconcile). 로컬 IndexedDB(financial_state)가
+     * 서버(L1) 실제 원장과 어긋났을 때(새 기기, 스토리지 초기화, 앱 재설치
+     * 등) 서버 값으로 교정한다. 지금까지는 이 복구 경로가 아예 없었다 —
+     * 로컬이 틀리면 영영 못 고치고, prev_settle_hash도 계속 틀려서 다음
+     * 거래가 STALE_STATE로 막혔다.
+     *
+     * bs-cash(실잔액)와 block_hash(다음 prev_settle_hash 기준)만 서버 값
+     *으로 덮어쓴다 — pl-purchase/pl-revenue(누적 통계)는 서버가 더 이상
+     * 추적하지 않으므로(2026-07-07 L1 이관 이후) 로컬 이력을 그대로 둔다.
+     *
+     * 호출 시점 권장: 앱/지갑 초기화 직후(로그인 직후), 그리고 STALE_STATE
+     * 오류를 받았을 때 재시도 전.
+     *
+     * @returns {{ drift: boolean, localBalance: number, serverBalance: number, blockHash: string|null }}
+     */
+    async hydrateFromServer() {
+      if (!this.guid) throw new Error('[Wallet] guid(IPv6)가 설정되지 않았습니다.');
+
+      const res  = await fetch(`${WORKER_URL}/biz/balance?guid=${encodeURIComponent(this.guid)}`);
+      const data = await res.json().catch(() => null);
+      if (!data?.ok) {
+        throw new Error('[Wallet] 서버 잔액 조회 실패: ' + (data?.error || res.status));
+      }
+
+      const db  = await openDB();
+      const rec = await idbGet(db, IDB_FS_KEY);
+      const localFs = rec?.state || {};
+      const localBsCash = parseFloat(localFs['bs-cash'] ?? '0') || 0;
+
+      const drift = Math.abs(localBsCash - data.balance) > 0.01;
+      if (drift) {
+        console.warn('[Wallet] 로컬-서버 잔액 불일치 감지 — 서버 값으로 교정',
+          '| local:', localBsCash, '| server:', data.balance);
+      }
+
+      const newFs = { ...localFs, 'bs-cash': data.balance };
+      await idbPut(db, IDB_FS_KEY, {
+        state:     newFs,
+        updatedAt: new Date().toISOString(),
+        // latest_block_hash가 없으면(지불 이력 없음) 기존 값 유지 —
+        // main.pb.js 3단계는 prev_settle_hash:null을 "첫 거래"로 처리한다.
+        block_hash: data.latest_block_hash || rec?.block_hash || null,
+      });
+
+      console.info('[Wallet] hydrateFromServer 완료',
+        '| drift:', drift, '| balance:', data.balance);
+
+      return {
+        drift,
+        localBalance:  localBsCash,
+        serverBalance: data.balance,
+        blockHash:     data.latest_block_hash || null,
+      };
+    }
+
+    /**
      * Hash Chain 전체 조회
      * @returns {Array} chain 이력 배열 (height 오름차순)
      */
     async getHashChain() {
       const db = await openDB();
       const records = await idbChainGetAll(db);
-      return records.sort((a, b) => a.height - b.height);
+      return records.sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at));
     }
 
     /**
@@ -676,25 +901,14 @@
      * @returns {{ valid: boolean, broken_at: number|null }}
      */
     async verifyChain() {
-      const chain = await this.getHashChain();
-      for (let i = 1; i < chain.length; i++) {
-        const cur  = chain[i];
-        const prev = chain[i - 1];
-
-        // 1) 연결 확인
-        if (cur.prev_local_hash !== prev.local_hash) {
-          return { valid: false, broken_at: cur.height, reason: 'chain_break' };
-        }
-
-        // 2) 해시 재계산 (h_{i-1} ∥ tx_hash ∥ block_hash ∥ height)
-        const recomputed = bufToHex(await sha256(
-          prev.local_hash + cur.tx_hash + cur.block_hash + String(cur.height)
-        ));
-        if (recomputed !== cur.local_hash) {
-          return { valid: false, broken_at: cur.height, reason: 'hash_mismatch' };
-        }
+      // v3.0: OpenHash anchor_chain — hashChain.js verifyChainIntegrity() 위임
+      try {
+        const { verifyChainIntegrity } = await import('./src/openhash/hashChain.js');
+        return await verifyChainIntegrity();
+      } catch(e) {
+        console.warn('[Wallet] verifyChain 실패:', e.message);
+        return { valid: false, broken_at: null, reason: e.message };
       }
-      return { valid: true, broken_at: null };
     }
 
     /**
@@ -723,7 +937,7 @@
       const kp  = await generateKeyPair();
       const enc = await encryptPrivKey(
         b64uToBuf(kp.privateKeyB64u).buffer,
-        passphrase || await GopangWallet._deviceEntropy()
+        passphrase || await GopangWallet._webauthnEntropy()
       );
 
       const record = {
@@ -761,10 +975,14 @@
         const encBuf = b64uToBuf(record.encPrivKey).buffer;
         const privRaw = await decryptPrivKey(
           encBuf,
-          passphrase || await GopangWallet._deviceEntropy()
+          passphrase || await GopangWallet._webauthnEntropy()
         );
 
         // JWK 형식으로 복원
+        // v6.0: extractable을 true로 — exportPrivateKey()(백업 키 내보내기)가
+        // 첫 생성 직후뿐 아니라 재방문 세션(load() 경로)에서도 동작해야 한다.
+        // 개인키 자체는 여전히 IndexedDB에 AES-GCM 암호화되어 있으므로, 이 변경이
+        // 새로 노출시키는 것은 "이미 메모리에 로드된 이 세션의 키"뿐이다.
         const privJwk = {
           kty: 'OKP', crv: 'Ed25519',
           x  : record.publicKeyB64u,
@@ -772,12 +990,36 @@
           key_ops: ['sign'],
         };
         const privKey = await crypto.subtle.importKey(
-          'jwk', privJwk, { name: 'Ed25519' }, false, ['sign']
+          'jwk', privJwk, { name: 'Ed25519' }, true, ['sign']
         );
         const pubRaw  = b64uToBuf(record.publicKeyB64u);
         const pubKey  = await crypto.subtle.importKey(
           'raw', pubRaw, { name: 'Ed25519' }, false, ['verify']
         );
+
+        // X25519 암호화 키페어 — 없으면 null (ensureX25519Key()로 추후 생성)
+        let x25519PrivKey = null, x25519PubKey = null, x25519PubKeyB64u = null;
+        const xRecord = await idbGet(db, IDB_X25519_ID).catch(() => null);
+        if (xRecord) {
+          const xEncBuf = b64uToBuf(xRecord.encPrivKey).buffer;
+          const xPrivRaw = await decryptPrivKey(
+            xEncBuf,
+            passphrase || await GopangWallet._webauthnEntropy()
+          );
+          const xPrivJwk = {
+            kty: 'OKP', crv: 'X25519',
+            x  : xRecord.publicKeyB64u,
+            d  : bufToB64u(xPrivRaw),
+            key_ops: ['deriveKey', 'deriveBits'],
+          };
+          x25519PrivKey = await crypto.subtle.importKey(
+            'jwk', xPrivJwk, { name: 'X25519' }, false, ['deriveKey']
+          );
+          x25519PubKey = await crypto.subtle.importKey(
+            'raw', b64uToBuf(xRecord.publicKeyB64u), { name: 'X25519' }, false, []
+          );
+          x25519PubKeyB64u = xRecord.publicKeyB64u;
+        }
 
         return new GopangWallet({
           publicKey    : pubKey,
@@ -786,11 +1028,48 @@
           publicKeyHex : record.publicKeyHex,
           handle       : localStorage.getItem(LS_HANDLE),
           guid         : null,
+          x25519PrivateKey   : x25519PrivKey,
+          x25519PublicKey    : x25519PubKey,
+          x25519PublicKeyB64u: x25519PubKeyB64u,
         });
       } catch (e) {
         console.error('[GopangWallet] load 실패:', e);
         return null;
       }
+    }
+
+    /**
+     * X25519 암호화 키페어 보장 — 없으면 생성 후 IndexedDB에 저장
+     * "공장 초기화 후 첫 접속 시 자동 개시"용 진입점
+     * 휴대폰(설정 창)에서만 호출할 것 — PC는 이 키를 생성하지 않음
+     * @param {string} [passphrase='']
+     * @returns {{ publicKeyB64u }} 등록할 공개키
+     */
+    async ensureX25519Key(passphrase = '') {
+      if (this._x25519PrivKey && this.x25519PublicKeyB64u) {
+        return { publicKeyB64u: this.x25519PublicKeyB64u, created: false };
+      }
+
+      const kp  = await generateX25519KeyPair();
+      const enc = await encryptPrivKey(
+        b64uToBuf(kp.privateKeyB64u).buffer,
+        passphrase || await GopangWallet._webauthnEntropy()
+      );
+
+      const record = {
+        publicKeyB64u: kp.publicKeyB64u,
+        encPrivKey   : bufToB64u(enc),
+        createdAt    : nowSec(),
+      };
+      const db = await openDB();
+      await idbPut(db, IDB_X25519_ID, record);
+      localStorage.setItem(LS_X25519_PUBKEY, kp.publicKeyB64u);
+
+      this._x25519PrivKey      = kp.privateKey;
+      this._x25519PubKey       = kp.publicKey;
+      this.x25519PublicKeyB64u = kp.publicKeyB64u;
+
+      return { publicKeyB64u: kp.publicKeyB64u, created: true };
     }
 
     /**
@@ -810,7 +1089,9 @@
     static async destroy() {
       const db = await openDB();
       await idbDel(db, IDB_KEY_ID);
+      await idbDel(db, IDB_X25519_ID).catch(() => {});
       localStorage.removeItem(LS_PUBKEY);
+      localStorage.removeItem(LS_X25519_PUBKEY);
       localStorage.removeItem(LS_HANDLE);
     }
 
@@ -844,7 +1125,7 @@
 
       const enc = await encryptPrivKey(
         b64uToBuf(privKeyB64u).buffer,
-        passphrase || await GopangWallet._deviceEntropy()
+        passphrase || await GopangWallet._webauthnEntropy()
       );
       const record = {
         publicKeyB64u: pubKeyB64u,
@@ -866,6 +1147,50 @@
       });
     }
 
+    /**
+     * v6.0 — 백업 키 복구: 개인키(Base64URL) 한 줄만으로 지갑 전체 복원.
+     * 공개키는 별도로 저장/입력받지 않고 개인키로부터 결정적으로 유도한다.
+     *
+     * 원리: Ed25519 개인키는 32바이트 시드 그 자체이며(JWK의 `d` 값과 동일),
+     * PKCS8 DER 포맷은 Ed25519에 한해 알고리즘 파라미터가 없어 앞 16바이트
+     * 헤더가 항상 고정값이다 — `302e020100300506032b657004220420`(hex).
+     * 이 고정 헤더 + 32바이트 시드로 PKCS8 버퍼를 직접 구성해 importKey하면,
+     * WebCrypto 구현이 공개키를 내부적으로 계산해 jwk export 시 `x`로 돌려준다
+     * (실제 브라우저/Node WebCrypto에서 라운드트립 서명·검증으로 검증된 방식).
+     *
+     * "백업 키를 다시 입력하면 정확히 같은 계정이 복원된다"가 보장되는 이유는
+     * 이 유도가 결정적(deterministic)이기 때문 — 같은 32바이트는 항상 같은
+     * 공개키(=같은 guid 검증 결과)를 낸다.
+     *
+     * @param {string} privKeyB64u — exportPrivateKey()가 내보낸 그 문자열
+     * @param {string} [passphrase='']
+     * @returns {GopangWallet}
+     * @throws {Error} 형식이 32바이트가 아니면 (잘못 붙여넣은 경우)
+     */
+    static async restoreFromPrivateKey(privKeyB64u, passphrase = '') {
+      const seed = b64uToBuf(privKeyB64u.trim());
+      if (seed.length !== 32) {
+        throw new Error('백업 키 형식이 올바르지 않습니다 (32바이트가 아님).');
+      }
+      const PKCS8_ED25519_HEADER = Uint8Array.from(
+        '302e020100300506032b657004220420'.match(/.{2}/g).map(h => parseInt(h, 16))
+      );
+      const pkcs8 = new Uint8Array(PKCS8_ED25519_HEADER.length + seed.length);
+      pkcs8.set(PKCS8_ED25519_HEADER, 0);
+      pkcs8.set(seed, PKCS8_ED25519_HEADER.length);
+
+      let imported;
+      try {
+        imported = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'Ed25519' }, true, ['sign']);
+      } catch (e) {
+        throw new Error('백업 키를 읽을 수 없습니다: ' + e.message);
+      }
+      const jwk = await crypto.subtle.exportKey('jwk', imported);
+      const pubKeyB64u = jwk.x; // 결정적으로 유도된 공개키
+
+      return GopangWallet.importFromBackup(privKeyB64u.trim(), pubKeyB64u, passphrase);
+    }
+
     /* ── 내부: 기기 고유 entropy (passphrase 미사용 시 대체) ── */
     static async _deviceEntropy() {
       // UserAgent + 고정 salt → SHA-256 → hex
@@ -876,10 +1201,141 @@
       return bufToHex(buf);
     }
 
+    /* ── WebAuthn PRF 기반 entropy ──────────────────────────
+     * enroll 안 됐으면 기존 _deviceEntropy()로 그대로 폴백 (하위호환).
+     * enroll 됐는데 생체인증 실패/취소 시엔 여기서 예외가 나며,
+     * 이는 decryptPrivKey()에서 AES-GCM auth tag 불일치로 안전하게 실패한다
+     * (평문 노출 없이 load() 쪽 catch로 흡수됨).
+     * ──────────────────────────────────────────────────── */
+    static async _webauthnEntropy() {
+      const credIdB64u = localStorage.getItem(LS_WEBAUTHN_CRED);
+      if (!credIdB64u) return GopangWallet._deviceEntropy();
+
+      const prfBytes = await GopangWallet._prfEval(b64uToBuf(credIdB64u).buffer);
+      return bufToHex(prfBytes.buffer);
+    }
+
+    /** 등록된 credential로 PRF 값을 재도출 (매번 동일 salt → 동일 결과) */
+    static async _prfEval(credentialIdBuf) {
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          rpId: WEBAUTHN_RP_ID,
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          allowCredentials: [{ id: credentialIdBuf, type: 'public-key' }],
+          userVerification: 'required',
+          extensions: { prf: { eval: { first: WEBAUTHN_PRF_SALT } } },
+        },
+      });
+      const results = assertion.getClientExtensionResults();
+      const first = results && results.prf && results.prf.results && results.prf.results.first;
+      if (!first) throw new Error('WEBAUTHN_PRF_EVAL_FAILED');
+      return new Uint8Array(first);
+    }
+
+    /**
+     * 플랫폼 인증기(지문/얼굴)를 새로 등록하고, 현재 지갑의 개인키를
+     * _deviceEntropy() 암호화 → PRF entropy 암호화로 전환한다.
+     * @returns {{ ok: boolean, reason?: string }}
+     *   reason 'PRF_UNSUPPORTED' — 이 브라우저/인증기는 PRF 미지원 → 폴백 유지, UI에서 안내할 것
+     *   reason 'NO_WALLET' — 아직 지갑이 없음 (create() 먼저 호출)
+     */
+    static async enrollWebAuthn() {
+      if (!window.PublicKeyCredential) return { ok: false, reason: 'PRF_UNSUPPORTED' };
+
+      const db = await openDB();
+      const record = await idbGet(db, IDB_KEY_ID);
+      if (!record) return { ok: false, reason: 'NO_WALLET' };
+
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          rp: { id: WEBAUTHN_RP_ID, name: 'Hondi Wallet' },
+          user: {
+            id: b64uToBuf(record.publicKeyB64u),
+            name: localStorage.getItem(LS_HANDLE) || 'gopang-wallet',
+            displayName: 'Gopang Wallet',
+          },
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+            residentKey: 'required',
+          },
+          extensions: { prf: {} },
+        },
+      });
+
+      const prfEnabled = cred.getClientExtensionResults() && cred.getClientExtensionResults().prf
+        && cred.getClientExtensionResults().prf.enabled;
+      if (!prfEnabled) return { ok: false, reason: 'PRF_UNSUPPORTED' };
+
+      // 기존 device-entropy로 복호화 → 새 PRF-entropy로 재암호화 (Ed25519 + X25519 둘 다)
+      const oldEntropy = await GopangWallet._deviceEntropy();
+      const newEntropyBytes = await GopangWallet._prfEval(cred.rawId);
+      const newEntropy = bufToHex(newEntropyBytes.buffer);
+
+      const privRaw = await decryptPrivKey(b64uToBuf(record.encPrivKey).buffer, oldEntropy);
+      const reEnc = await encryptPrivKey(privRaw, newEntropy);
+      await idbPut(db, IDB_KEY_ID, { ...record, encPrivKey: bufToB64u(reEnc) });
+
+      const xRecord = await idbGet(db, IDB_X25519_ID).catch(() => null);
+      if (xRecord) {
+        const xPrivRaw = await decryptPrivKey(b64uToBuf(xRecord.encPrivKey).buffer, oldEntropy);
+        const xReEnc = await encryptPrivKey(xPrivRaw, newEntropy);
+        await idbPut(db, IDB_X25519_ID, { ...xRecord, encPrivKey: bufToB64u(xReEnc) });
+      }
+
+      localStorage.setItem(LS_WEBAUTHN_CRED, bufToB64u(cred.rawId));
+      return { ok: true };
+    }
+
+    static isWebAuthnEnrolled() {
+      return !!localStorage.getItem(LS_WEBAUTHN_CRED);
+    }
+
+    /**
+     * WebAuthn 잠금 해제 — 다시 device-entropy 암호화로 되돌린다.
+     * (기기 분실이 아니라 '지문 인식기가 자꾸 실패한다' 류의 사용자 요청 대응용)
+     */
+    static async disableWebAuthn() {
+      if (!GopangWallet.isWebAuthnEnrolled()) return { ok: true, already: true };
+
+      const db = await openDB();
+      const record = await idbGet(db, IDB_KEY_ID);
+      if (!record) return { ok: false, reason: 'NO_WALLET' };
+
+      const credIdB64u = localStorage.getItem(LS_WEBAUTHN_CRED);
+      const oldEntropyBytes = await GopangWallet._prfEval(b64uToBuf(credIdB64u).buffer);
+      const oldEntropy = bufToHex(oldEntropyBytes.buffer);
+      const newEntropy = await GopangWallet._deviceEntropy();
+
+      const privRaw = await decryptPrivKey(b64uToBuf(record.encPrivKey).buffer, oldEntropy);
+      const reEnc = await encryptPrivKey(privRaw, newEntropy);
+      await idbPut(db, IDB_KEY_ID, { ...record, encPrivKey: bufToB64u(reEnc) });
+
+      const xRecord = await idbGet(db, IDB_X25519_ID).catch(() => null);
+      if (xRecord) {
+        const xPrivRaw = await decryptPrivKey(b64uToBuf(xRecord.encPrivKey).buffer, oldEntropy);
+        const xReEnc = await encryptPrivKey(xPrivRaw, newEntropy);
+        await idbPut(db, IDB_X25519_ID, { ...xRecord, encPrivKey: bufToB64u(xReEnc) });
+      }
+
+      localStorage.removeItem(LS_WEBAUTHN_CRED);
+      return { ok: true };
+    }
+
     /* ── 정적 유틸 노출 ── */
     static nicknameHash(nickname, lang) { return nicknameHash(nickname, lang); }
     static verify(publicKeyB64u, payload, signatureB64u) {
       return verify(publicKeyB64u, payload, signatureB64u);
+    }
+    /**
+     * PC(거울)에서 호출 — 지갑 인스턴스 없이, 휴대폰의 X25519 공개키만으로 봉투 암호화
+     * @param {string} recipientPubKeyB64u — 휴대폰의 X25519 공개키
+     * @param {string} plaintext
+     */
+    static async sealForRecipient(recipientPubKeyB64u, plaintext) {
+      return sealForRecipient(recipientPubKeyB64u, plaintext);
     }
     static bufToB64u(buf)     { return bufToB64u(buf); }
     static b64uToBuf(b64u)    { return b64uToBuf(b64u); }
@@ -935,39 +1391,29 @@
         console.info('[GopangWallet] 새 지갑 자동 생성 완료');
       }
 
-      // gopang_user_v3에서 guid 연결
+      // gopang_user_v4에서 guid 연결
       const stored = (() => {
-        try { return JSON.parse(localStorage.getItem('gopang_user_v3') || 'null'); }
+        try { return JSON.parse(localStorage.getItem('gopang_user_v4') || 'null'); }
         catch { return null; }
       })();
       if (stored?.ipv6) {
         wallet.setIdentity({ guid: stored.ipv6, handle: stored.handle || null });
       }
 
-      // 로컬 재무 상태가 비어있으면 서버에서 초기 동기화 시도
-      const fs = await wallet.getFinancialState();
-      if (!fs || Object.keys(fs).length === 0) {
-        if (stored?.ipv6) {
-          try {
-            const sbKey = localStorage.getItem('_sbkey')
-                        || localStorage.getItem('gopang_supabase_key')
-                        || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
-            const res = await fetch(
-              `https://ebbecjfrwaswbdybbgiu.supabase.co/rest/v1/user_profiles`
-              + `?current_ipv6=eq.${stored.ipv6}&select=extra&limit=1`,
-              { headers: { apikey: sbKey, 'Authorization': `Bearer ${sbKey}` } }
-            );
-            if (res.ok) {
-              const rows = await res.json();
-              const serverFs = rows[0]?.extra?.fs;
-              if (serverFs) {
-                await wallet.setFinancialState(serverFs);
-                console.info('[GopangWallet] 서버 재무 상태 초기 동기화 완료');
-              }
-            }
-          } catch(e) {
-            console.warn('[GopangWallet] 서버 동기화 실패 (무시):', e.message);
-          }
+      // 2026-07-07 재수정: "fs가 비어있으면 동기화"였던 조건을 없앤다.
+      // 오늘 가입 시점에 fs를 명시적으로 {bs-cash:0,...}로 초기화하도록
+      // 바꿨는데(_initGdcWalletAndFs), 그 결과 fs가 가입 직후부터 절대
+      // "비어있지" 않게 돼서 — 이 hydrateFromServer() 호출이 가입 이후
+      // 평생 단 한 번도 다시 실행되지 않는 상태가 됐다(사고실험으로 발견).
+      // 판매자처럼 거래에 실시간으로 참여하지 않는 기기는 이게 사실상
+      // 유일한 재대사 경로인데, 그게 막혀 있었다는 뜻이다. 이제 guid가
+      // 있으면 매 앱 실행마다 무조건 서버 값으로 재대사한다 — 실패해도
+      // (오프라인 등) 로컬 값을 그대로 쓰면 되므로 앱 시작을 막지 않는다.
+      if (stored?.ipv6) {
+        try {
+          await wallet.hydrateFromServer();
+        } catch(e) {
+          console.warn('[GopangWallet] 서버 동기화 실패 (무시):', e.message);
         }
       }
 
@@ -1060,3 +1506,5 @@
  * const ok = await GopangWallet.verify(pubKeyB64u, payload, sig);
  *
  * ==================================================== */
+
+
