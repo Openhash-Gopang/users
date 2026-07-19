@@ -1,6 +1,7 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
+    <script src="/gopang-wallet.js"></script>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>K-Market</title>
@@ -477,9 +478,78 @@
 
 const PROXY      = 'https://hondi-proxy.tensor-city.workers.dev';
 const SP_URL     = 'https://raw.githubusercontent.com/Openhash-Gopang/users/main/SP-USERS-v2_0.txt';
-const SB_URL     = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
-const SB_KEY     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
-const SB_HEADERS = { 'Content-Type':'application/json', 'apikey':SB_KEY, 'Authorization':'Bearer '+SB_KEY };
+const PB_URL = 'https://l1-hanlim.gopang.net';
+
+// ── L1 PocketBase(hanlim) profiles 기반 검색 헬퍼 — Supabase search_entities RPC 대체 ──
+function _haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function _normalizeProfile(r, loc) {
+  const ex = r.extra || {};
+  const out = {
+    ...r,
+    services:     ex.services || [],
+    website:      ex.website || null,
+    trust_level:  ex.trust_level || 'L0',
+    gdc_accepted: !!ex.gdc_accepted,
+    rating_avg:   r.temp_score || 0,
+    review_count: r.temp_rating_count || 0,
+  };
+  out.distance_km = (loc?.lat != null && loc?.lng != null && r.lat && r.lng)
+    ? _haversineKm(loc.lat, loc.lng, r.lat, r.lng) : null;
+  return out;
+}
+
+function _pbEsc(s) { return String(s).replace(/'/g, "\\'"); }
+
+// search_entities(p_...) RPC와 같은 파라미터 모양을 받아 같은 모양의
+// 배열을 반환한다 — 호출부·렌더링 코드는 그대로 둘 수 있다.
+async function pbSearchEntities(p) {
+  const parts = [];
+  if (p.p_entity_type)  parts.push(`entity_type='${_pbEsc(p.p_entity_type)}'`);
+  if (p.p_occupation)   parts.push(`occupation~'${_pbEsc(p.p_occupation)}'`);
+  if (p.p_keyword)      parts.push(`search_text~'${_pbEsc(p.p_keyword)}'`);
+  if (p.p_handle)        parts.push(`handle='${_pbEsc(p.p_handle)}'`);
+  if (p.p_nickname)     parts.push(`nickname~'${_pbEsc(p.p_nickname)}'`);
+  if (p.p_address)      parts.push(`address~'${_pbEsc(p.p_address)}'`);
+  if (p.p_exclude_guid) parts.push(`guid!='${_pbEsc(p.p_exclude_guid)}'`);
+  const filter = parts.join(' && ');
+
+  const res = await fetch(
+    `${PB_URL}/api/collections/profiles/records?filter=${encodeURIComponent(filter)}&perPage=100`
+  );
+  if (!res.ok) throw new Error(`PocketBase ${res.status}`);
+  const data = await res.json();
+  const loc  = (p.p_lat != null && p.p_lng != null) ? { lat: p.p_lat, lng: p.p_lng } : null;
+  let rows   = (Array.isArray(data.items) ? data.items : []).map(r => _normalizeProfile(r, loc));
+
+  if (p.p_gdc_only) rows = rows.filter(r => r.gdc_accepted);
+  if (p.p_trust_min) {
+    const order = { L0:0, L1:1, L2:2, L3:3 };
+    const min = order[p.p_trust_min] ?? 0;
+    rows = rows.filter(r => (order[r.trust_level] ?? 0) >= min);
+  }
+
+  const sort = p.p_sort || 'rating';
+  rows.sort((a, b) => {
+    if (sort === 'distance') {
+      if (a.distance_km == null) return 1;
+      if (b.distance_km == null) return -1;
+      return a.distance_km - b.distance_km;
+    }
+    if (sort === 'review_count') return (b.review_count||0) - (a.review_count||0);
+    return (b.rating_avg||0) - (a.rating_avg||0); // 기본: rating
+  });
+
+  const offset = p.p_offset || 0;
+  const limit  = p.p_limit  || 20;
+  return rows.slice(offset, offset + limit);
+}
 
 let currentUser   = null;
 let systemPrompt  = null;
@@ -730,30 +800,22 @@ async function doSearch() {
   const langCode    = (navigator.language || 'ko').split('-')[0];
 
   try {
-    const res = await fetch(`${SB_URL}/rest/v1/rpc/search_entities`, {
-      method:  'POST',
-      headers: SB_HEADERS,
-      body: JSON.stringify({
-        p_entity_type:  entityType,
-        p_keyword:      parsed.p_keyword  || null,
-        p_handle:       parsed.p_handle   || null,
-        p_nickname:     parsed.p_nickname || null,
-        p_lang_code:    langCode,
-        p_occupation:   occupation,
-        p_address:      parsed.p_address  || callerCtx?.filter?.address || null,
-        p_gdc_only:     callerCtx?.filter?.gdc_only  || false,
-        p_trust_min:    callerCtx?.filter?.trust_min || null,
-        p_lat:          loc?.lat  || null,
-        p_lng:          loc?.lng  || null,
-        p_sort:         sort,
-        p_limit:        20,
-        p_offset:       0,
-        p_exclude_guid: excludeGuid,
-      }),
+    const results = await pbSearchEntities({
+      p_entity_type:  entityType,
+      p_keyword:      parsed.p_keyword  || null,
+      p_handle:       parsed.p_handle   || null,
+      p_nickname:     parsed.p_nickname || null,
+      p_occupation:   occupation,
+      p_address:      parsed.p_address  || callerCtx?.filter?.address || null,
+      p_gdc_only:     callerCtx?.filter?.gdc_only  || false,
+      p_trust_min:    callerCtx?.filter?.trust_min || null,
+      p_lat:          loc?.lat  || null,
+      p_lng:          loc?.lng  || null,
+      p_sort:         sort,
+      p_limit:        20,
+      p_offset:       0,
+      p_exclude_guid: excludeGuid,
     });
-    if (!res.ok) throw new Error(`Supabase ${res.status}`);
-    const rows    = await res.json();
-    const results = Array.isArray(rows) ? rows : [];
     // §13.4 동명이인 11건 이상 — 범위 축소 요구
     if (results.length >= 11 && parsed.mode !== 'handle') {
       document.getElementById('search-results').innerHTML =
@@ -907,19 +969,10 @@ async function togglePublic() {
   document.getElementById('pub-val').textContent = isPublic ? '공개' : '비공개';
   localStorage.setItem('gopang_user_public', isPublic);
 
-  const guid = currentUser?.guid || currentUser?.ipv6;
-  if (guid) {
-    try {
-      await fetch(
-        `${SB_URL}/rest/v1/user_profiles?guid=eq.${encodeURIComponent(guid)}`,
-        {
-          method:  'PATCH',
-          headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
-          body:    JSON.stringify({ is_public: isPublic }),
-        }
-      );
-    } catch(e) { console.warn('[togglePublic] Supabase 동기화 실패:', e.message); }
-  }
+  // 서버 동기화 보류: profiles UPDATE는 PocketBase 훅이 guid/pubkey/
+  // Ed25519 서명을 요구하는데(2026-07-19 확인), webapp.html엔 아직 지갑
+  // 서명 인프라가 없다. 지갑 연동 후 서명된 요청으로 재구현 필요.
+  // (Supabase 호출은 제거 — 로컬 상태만 반영)
   toast(isPublic ? '검색 공개로 설정되었습니다.' : '검색 비공개로 설정되었습니다.');
 }
 
@@ -985,3 +1038,4 @@ function getDummy(q) {
   onerror="console.warn('[auth] subsystem-auth.js 로드 실패')"></script>
 </body>
 </html>
+

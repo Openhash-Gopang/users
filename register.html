@@ -516,9 +516,6 @@ document.addEventListener('click', e => {
   });
 });
 
-const SB_URL = 'https://ebbecjfrwaswbdybbgiu.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViYmVjamZyd2Fzd2JkeWJiZ2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjE5ODQsImV4cCI6MjA5NTEzNzk4NH0.H2ahQKtWdSke04Pdi3hDY86pdTx7UUKPUpQMlS_zciA';
-const SB_H   = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 const L1     = 'KR-JEJU-JEJU-HANLIM';
 const WORKER = 'https://hondi-proxy.tensor-city.workers.dev';
 
@@ -602,7 +599,7 @@ function buildPreview() {
   });
 }
 
-// ── 등록 처리 ──
+// ── 등록 처리 (L1 PocketBase profiles — Supabase 전면 중단 2026-07-19) ──
 async function submitRegister() {
   const btn = document.getElementById('btn-submit');
   btn.disabled = true;
@@ -622,57 +619,45 @@ async function submitRegister() {
   const services = svcRaw.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
   const guid     = genGuid();
   const nh_v2    = await sha256('ko:'+name);
-  const nh_v1    = await sha256(name);
-  const pguid    = guid;  // Phase 1: guid = primary_guid
   const tag      = nh_v2.slice(0,4);
   const handle   = `@${name}#${tag}`;
-  const ipv6     = `2601:db80:bd05:${Date.now().toString(16).slice(-4)}::${Math.random().toString(16).slice(2,6)}:0001`;
+
+  // 한림읍 기준 좌표 (기존 location_log 로직 유지)
+  const lat = 33.40 + (Math.random()*0.06 - 0.03);
+  const lng = 126.26 + (Math.random()*0.06 - 0.03);
+
+  // search_entities RPC의 ILIKE 매칭을 대신할 통합 검색 텍스트
+  const searchText = [name, occ, ...services, addr].filter(Boolean).join(' ');
 
   try {
-    // 1. users 삽입
-    await fetch(`${SB_URL}/rest/v1/users`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({guid,device_fp:'web-register-'+Date.now(),registered_at:new Date().toISOString(),
-        last_seen_at:new Date().toISOString(),gduda_registered:true,l1_propagated_at:new Date().toISOString()})});
+    const res = await fetch('https://l1-hanlim.gopang.net/api/collections/profiles/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guid, handle,
+        nickname_hash: nh_v2,
+        nickname:      name,
+        native_lang:   'ko',
+        entity_type:   'org',
+        name, occupation: occ, address: addr,
+        lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)),
+        is_public:   pub,
+        search_text: searchText,
+        claim_status: 'claimed',
+        claim_source: 'self_register',
+        temp_score: 0, temp_rating_count: 0, temp_updated_at: new Date().toISOString(),
+        extra: {
+          services, website: website||null, phone: ph||null,
+          business_hours: hrs||null, description: desc||null,
+          gdc_accepted: gdc, trust_level: 'L0',
+        },
+      }),
+    });
 
-    // 2. user_profiles 삽입
-    await fetch(`${SB_URL}/rest/v1/user_profiles`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({guid,primary_guid:pguid,current_ipv6:ipv6,entity_type:'org',
-        name,occupation:occ,services,address:addr,is_public:pub,
-        l1_node:L1,l2_node:'KR-JEJU-JEJU',l3_node:'KR-JEJU',
-        website:website||null,
-        extra:{phone:ph||null,business_hours:hrs||null,description:desc||null,gdc_accepted:gdc},
-        updated_at:new Date().toISOString()})});
-
-    // 3. user_trust_levels
-    await fetch(`${SB_URL}/rest/v1/user_trust_levels`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({guid,trust_level:'L0'})});
-
-    // 4. user_gdc_settings
-    await fetch(`${SB_URL}/rest/v1/user_gdc_settings`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({guid,gdc_accepted:gdc})});
-
-    // 5. user_nicknames
-    await fetch(`${SB_URL}/rest/v1/user_nicknames`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({guid,nickname:name,nickname_hash:nh_v1,nickname_hash_v2:nh_v2,
-        lang_code:'ko',script:'Hang',handle,verified:false,status:'active'})});
-
-    // 6. nickname_cache
-    await fetch(`${SB_URL}/rest/v1/nickname_cache`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({nickname_hash:nh_v2,primary_guid:pguid,handle,
-        lang_code:'ko',script:'Hang',verified:false,
-        l1_node:L1,l2_node:'KR-JEJU-JEJU',l3_node:'KR-JEJU',
-        ttl:86400,updated_at:new Date().toISOString()})});
-
-    // 7. location_log (한림읍 기준 좌표)
-    const lat = 33.40 + (Math.random()*0.06 - 0.03);
-    const lng = 126.26 + (Math.random()*0.06 - 0.03);
-    await fetch(`${SB_URL}/rest/v1/location_log`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({user_guid:guid,lat:parseFloat(lat.toFixed(6)),lng:parseFloat(lng.toFixed(6)),
-        address:addr,recorded_at:new Date().toISOString()})});
-
-    // 8. seller_ratings 초기화
-    await fetch(`${SB_URL}/rest/v1/seller_ratings`,{method:'POST',headers:{...SB_H,'Prefer':'return=minimal'},
-      body:JSON.stringify({seller_guid:guid,weighted_avg:0,review_count:0,total_volume:0})});
+    if (!res.ok) {
+      const errBody = await res.text().catch(()=>'');
+      throw new Error(`등록 실패 (${res.status}): ${errBody}`);
+    }
 
     // ── 완료 화면 ──
     showDone({name, handle, guid, occ, addr, gdc, pub});
