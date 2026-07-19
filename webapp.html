@@ -472,7 +472,8 @@
 // users.hondi.net — webapp.html v2.1 (모바일)
 // 변경: 실제 DB(user_profiles 기반) + ctx 수신
 //       SP-USERS-v2_0 / AI 채팅은 Worker /ai/chat (기존)
-//       검색·is_public은 Supabase REST 직접 호출 (Worker 수정 없음)
+//       검색은 L1 PocketBase 직접 조회, is_public은 지갑 서명 +
+//       Worker /profile/visibility 경유(2026-07-19)
 //       postMessage origin 고정 / 마이크 v3.6 패턴 준수
 // ════════════════════════════════════════════════════════════
 
@@ -963,17 +964,46 @@ function hideSheet() {
   document.getElementById('bottom-sheet').classList.remove('show');
 }
 
-/* ── is_public 토글 (Supabase user_profiles 직접 PATCH) ── */
+/* ── is_public 토글 (2026-07-19: 지갑 서명 + worker.js /profile/visibility 경유) ── */
 async function togglePublic() {
-  isPublic = !isPublic;
+  const newValue = !isPublic;
+  const guid = currentUser?.ipv6 || currentUser?.guid;
+  const wallet = window.gopangWallet;
+
+  if (!guid) { toast('로그인 정보가 없습니다.'); return; }
+  if (!wallet?.signPayload) { toast('지갑을 사용할 수 없습니다 — 앱에서 다시 시도해 주세요.'); return; }
+
+  // 낙관적 UI 갱신 — 서버 반영 실패 시 아래 catch에서 되돌린다.
+  isPublic = newValue;
   document.getElementById('pub-val').textContent = isPublic ? '공개' : '비공개';
   localStorage.setItem('gopang_user_public', isPublic);
 
-  // 서버 동기화 보류: profiles UPDATE는 PocketBase 훅이 guid/pubkey/
-  // Ed25519 서명을 요구하는데(2026-07-19 확인), webapp.html엔 아직 지갑
-  // 서명 인프라가 없다. 지갑 연동 후 서명된 요청으로 재구현 필요.
-  // (Supabase 호출은 제거 — 로컬 상태만 반영)
-  toast(isPublic ? '검색 공개로 설정되었습니다.' : '검색 비공개로 설정되었습니다.');
+  try {
+    const pubkey = wallet.publicKeyB64u || wallet.publicKeyB64 || '';
+    if (!pubkey) throw new Error('지갑 공개키를 찾을 수 없습니다.');
+    const ts = Date.now().toString();
+    // worker.js handleProfileVisibility가 검증하는 서명 대상 문자열과
+    // 정확히 일치해야 한다(register-profile.html _signAndAttachProfile과 동일 패턴).
+    const sigMsg = `${guid}:${pubkey}:${ts}`;
+    const signature = await wallet.signPayload(sigMsg);
+
+    const res = await fetch(`${PROXY}/profile/visibility`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guid, pubkey, signature, ts, is_public: newValue }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) throw new Error(data?.detail || data?.error || '서버 반영 실패');
+
+    toast(isPublic ? '검색 공개로 설정되었습니다.' : '검색 비공개로 설정되었습니다.');
+  } catch (e) {
+    // 서버와 어긋난 채로 로컬만 바뀐 상태로 남기지 않는다 — 원래 값으로 롤백.
+    isPublic = !newValue;
+    document.getElementById('pub-val').textContent = isPublic ? '공개' : '비공개';
+    localStorage.setItem('gopang_user_public', isPublic);
+    toast('설정 반영 실패: ' + e.message);
+    console.error('[togglePublic]', e);
+  }
 }
 
 /* ── 유틸 ── */
