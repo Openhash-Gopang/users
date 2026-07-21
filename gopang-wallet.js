@@ -27,6 +27,14 @@
   const LS_X25519_PUBKEY = 'gopang_wallet_x25519_pubkey';
   const LS_HANDLE        = 'gopang_wallet_handle';
   const LS_WEBAUTHN_CRED = 'gopang_wallet_webauthn_cred_id';
+  // 2026-07-20 신설 — 고액 거래 재인증(step-up) 전용 credential.
+  // LS_WEBAUTHN_CRED(위)는 PRF 확장이 필수인 "로컬 저장소 재암호화"
+  // 목적과 강하게 결합돼 있는데, PRF는 기기·브라우저에 따라 미지원인
+  // 경우가 실사로 확인됐다(지문 인증 자체는 성공해도 PRF_UNSUPPORTED로
+  // enrollWebAuthn()이 실패). 고액 거래 재인증은 서버가 직접 서명을
+  // 검증하는 방식이라 PRF가 애초에 필요 없다 — 완전히 독립된 credential
+  // 로 분리해, PRF 미지원 기기에서도 재인증만큼은 등록되게 한다.
+  const LS_STEPUP_CRED = 'gopang_wallet_stepup_cred_id';
   const WEBAUTHN_RP_ID   = 'hondi.net';  // 전체 hondi.net 서브도메인에서 credential 공유
   // PRF는 결정론적 — 동일 salt + 동일 authenticator = 항상 동일 32바이트.
   // 서버에 아무것도 저장할 필요 없음.
@@ -735,6 +743,119 @@
     }
 
     /**
+     * 2026-07-18 신설 — GDC P2P 이체 (혼디 코드 스캔 → 프로필 → 이체)
+     * 새 tx 빌더를 만들지 않고 위의 sign()을 그대로 재사용한다 — outputs에
+     * 'gopang-platform' 항목을 안 넣으면 sign() 내부에서 platformFee=0으로
+     * 계산돼(sellerOut/platformOut 분리 로직) 결과적으로 수수료 없는 이체가
+     * 된다. buildTxWithPrevHash가 항상 2번째 output을 만드는 구조라 금액
+     * 0짜리 'gopang-platform' output이 하나 더 붙긴 하지만(원장이 약간
+     * 지저분해지는 정도), 검증된 sign() 경로를 그대로 타는 게 새 tx 빌더를
+     * 만드는 것보다 안전하다 — 설계문서 §3의 "다음에 개선" 항목으로 남김.
+     *
+     * @param {Object} opts
+     *   opts.toGuid  — 수신자 GUID (스캔된 프로필에서 확보)
+     *   opts.amount  — 이체 금액(₮)
+     *   opts.memo    — purpose='purchase'면 필수(품목명), 'transfer'면 선택
+     *   opts.purpose — 'transfer'(단순송금, 기본값) | 'purchase'(재화·용역 대금)
+     *                  — 2026-07-18 GDC 상거래 완성 계획서 Phase 1. 서버가
+     *                  최종 강제하지만(worker.js handleGdcTransfer), 클라도
+     *                  먼저 걸러서 불필요한 왕복을 줄인다.
+     * @returns {Object} L1 응답 (block_hash, height, seller_claim 등)
+     */
+    async sendGdc({ toGuid, amount, memo = '', purpose = 'transfer' }) {
+      if (!this.guid) throw new Error('[Wallet] guid(IPv6)가 설정되지 않았습니다.');
+      if (!toGuid) throw new Error('[Wallet] 수신자 GUID가 없습니다.');
+      if (toGuid === this.guid) throw new Error('[Wallet] 본인에게는 이체할 수 없습니다.');
+      if (!(amount > 0)) throw new Error('[Wallet] 이체 금액이 올바르지 않습니다.');
+      if (amount < 1) throw new Error('[Wallet] 최소 이체액은 ₮1입니다.');
+      if (purpose !== 'transfer' && purpose !== 'purchase') {
+        throw new Error("[Wallet] purpose는 'transfer' 또는 'purchase'여야 합니다.");
+      }
+      if (purpose === 'purchase' && !memo.trim()) {
+        throw new Error('[Wallet] 재화·용역 대금 결제는 품목명(memo)을 입력해야 합니다.');
+      }
+
+      // ── 고액 거래 재인증 사전 점검(2026-07-20) — 문턱 조회 및 미등록
+      // 시 조기 실패만 여기서 한다. 실제 생체인증(서버 챌린지 결박)은
+      // sign() 이후, tx_hash가 나온 다음에 한다(WYSIWYS — 이 거래에만
+      // 유효한 챌린지를 받기 위함, 사고실험에서 지적된 미비점 수정).
+      let stepUpThreshold = null;
+      try {
+        const thRes = await fetch(`${CFG.endpoint}/account/step-up-threshold?guid=${encodeURIComponent(this.guid)}`);
+        const thData = await thRes.json().catch(() => null);
+        stepUpThreshold = (thRes.ok && thData?.ok) ? thData.threshold : null;
+      } catch (e) {
+        // 조회 자체가 네트워크 오류로 실패하면 이 시점엔 판단을 유보한다
+        // (아래서 다시 시도) — 서버가 handleGdcTransfer에서 어차피
+        // 독립적으로 재확인하므로, 여기서 못 정해도 최종 안전성은
+        // 유지된다(사고실험 이후 서버측 강제로 바뀐 부분).
+        console.warn('[Wallet] 재인증 문턱 사전 조회 실패(서버가 최종 강제):', e.message);
+      }
+      const needsStepUp = stepUpThreshold !== null && amount >= stepUpThreshold;
+      if (needsStepUp && !GopangWallet.isStepUpEnrolled()) {
+        throw new Error(
+          `[Wallet] ₮${stepUpThreshold.toLocaleString()} 이상 거래는 생체인증 등록이 필요합니다. ` +
+          `설정 → 생체인증에서 먼저 등록해 주세요.`
+        );
+      }
+
+      // 1) 로컬 잔액 사전 확인(UX용 — 최종 검증은 L1이 재생 계산으로 함)
+      const db = await openDB();
+      const fsRec = await idbGet(db, IDB_FS_KEY);
+      const localBalance = parseFloat(fsRec?.state?.['bs-cash'] ?? '0') || 0;
+      if (localBalance < amount) {
+        throw new Error(`[Wallet] 잔액이 부족합니다(로컬 확인, 잔액 ₮${localBalance}).`);
+      }
+
+      // 2) tx 빌드 + 서명 (검증된 sign() 그대로 재사용, output 1개만 지정)
+      const signed = await this.sign({
+        outputs: [{ recipient_guid: toGuid, amount }],
+        total: amount,
+        seller_guid: toGuid,
+        items: [],
+      });
+
+      // 2-1) 고액 거래면 이제 이 tx_hash에 결박된 생체 재인증을 실제로
+      // 수행한다 — 서버가 챌린지를 발급하고, 서버가 서명을 직접
+      // 검증하고, 서버가 step_up_token을 발급한다(전 과정 서버 확인 —
+      // 사고실험에서 지적된 치명적 결함의 실제 수정 지점).
+      let stepUpToken = null;
+      if (needsStepUp) {
+        const bio = await GopangWallet.requireStepUpBiometric(this.guid, signed.tx_hash);
+        if (!bio.ok) {
+          throw new Error(`[Wallet] 생체인증에 실패해 거래를 중단합니다(${bio.reason}).`);
+        }
+        stepUpToken = bio.step_up_token;
+      }
+
+      // 3) 서버 호출 — /biz/order가 아니라 전용 엔드포인트로
+      const res = await fetch(`${CFG.endpoint}/wallet/gdc-transfer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tx: signed.tx, tx_hash: signed.tx_hash,
+          sender_sig: signed.buyer_sig, sender_public_key: signed.buyer_public_key,
+          from_guid: this.guid, to_guid: toGuid, amount, memo, purpose,
+          prev_settle_hash: signed.prev_settle_hash, balance_claimed: localBalance,
+          step_up_token: stepUpToken,
+        }),
+      });
+      const result = await res.json().catch(() => ({ ok: false, error: 'PARSE_FAILED' }));
+      if (!result.ok) {
+        throw new Error(`[Wallet] 이체 실패: ${result.error}${result.detail ? ' — ' + result.detail : ''}`);
+      }
+
+      // 4) redeemClaim 재사용 — 로컬 재무상태 갱신(송신자 측 차감)
+      if (result.buyer_claim) {
+        await this.redeemClaim({
+          block_hash: result.block_hash, block_id: result.block_id,
+          claims: [result.buyer_claim], tx_hash: result.tx_hash || signed.tx_hash,
+        });
+      }
+
+      return result;
+    }
+
+    /**
      * L1 청구권 수신 → 재무 상태 자기갱신 + Hash Chain 기록
      * gopang-app.js GWP_DONE 핸들러에서 호출 (STEP 24)
      *
@@ -1239,6 +1360,12 @@
      *   reason 'PRF_UNSUPPORTED' — 이 브라우저/인증기는 PRF 미지원 → 폴백 유지, UI에서 안내할 것
      *   reason 'NO_WALLET' — 아직 지갑이 없음 (create() 먼저 호출)
      */
+    /**
+     * @param {string|null} [guid] — 2026-07-20 신설: 서버에 공개키를
+     *   등록하려면 guid가 필요하다(고액 거래 재인증을 서버가 실제로
+     *   검증하게 하려면 필수 — 없으면 로컬 재암호화만 하고 서버 등록은
+     *   건너뛴다, 하위호환).
+     */
     static async enrollWebAuthn() {
       if (!window.PublicKeyCredential) return { ok: false, reason: 'PRF_UNSUPPORTED' };
 
@@ -1269,6 +1396,13 @@
         && cred.getClientExtensionResults().prf.enabled;
       if (!prfEnabled) return { ok: false, reason: 'PRF_UNSUPPORTED' };
 
+      // (2026-07-20: 여기서 서버에 공개키를 등록하던 코드를 제거했다 —
+      // 고액 거래 재인증은 PRF와 무관한 별도 credential(enrollStepUpBiometric,
+      // LS_STEPUP_CRED)로 완전히 분리했다. 이 함수는 원래 목적인
+      // "로컬 저장소 재암호화"에만 집중한다 — 하나의 credential이
+      // 두 가지 다른 목적을 겸하면서 생긴 PRF_UNSUPPORTED 연쇄 실패
+      // 문제가 재발하지 않게 하기 위함.)
+
       // 기존 device-entropy로 복호화 → 새 PRF-entropy로 재암호화 (Ed25519 + X25519 둘 다)
       const oldEntropy = await GopangWallet._deviceEntropy();
       const newEntropyBytes = await GopangWallet._prfEval(cred.rawId);
@@ -1291,6 +1425,140 @@
 
     static isWebAuthnEnrolled() {
       return !!localStorage.getItem(LS_WEBAUTHN_CRED);
+    }
+
+    /**
+     * 2026-07-20 신설 — 고액 거래 재인증 전용 생체인증 등록.
+     * enrollWebAuthn()과 달리 PRF 확장을 전혀 요구하지 않는다 —
+     * 서버가 assertion 서명을 직접 검증하는 방식이라(handleStepUpVerify)
+     * 로컬 키 유도(PRF)가 필요 없다. 실사로 확인된 문제: PRF는 기기·
+     * 브라우저에 따라 미지원인 경우가 흔해(지문 인증 자체는 성공해도
+     * enrollWebAuthn()이 PRF_UNSUPPORTED로 실패), 재인증 기능 전체가
+     * PRF 지원 기기로만 제한될 뻔했다 — 완전히 독립시켜 이 문제를
+     * 근본적으로 없앤다.
+     * @param {string} guid — 서버에 공개키를 등록하려면 필수
+     * @returns {{ ok: boolean, reason?: string }}
+     */
+    static async enrollStepUpBiometric(guid) {
+      if (!window.PublicKeyCredential) return { ok: false, reason: 'UNSUPPORTED' };
+      if (!guid) return { ok: false, reason: 'GUID_REQUIRED' };
+
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          rp: { id: WEBAUTHN_RP_ID, name: 'Hondi Wallet' },
+          user: {
+            id: crypto.getRandomValues(new Uint8Array(16)),
+            name: localStorage.getItem(LS_HANDLE) || 'gopang-wallet',
+            displayName: 'Gopang Wallet (재인증 전용)',
+          },
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+            residentKey: 'preferred', // required 아님 — PRF와 달리 없어도 재인증 흐름엔 지장 없음
+          },
+          // extensions: prf 없음 — 의도적. 이 기능엔 필요 없다(위 설명 참고).
+        },
+      });
+
+      if (!cred.response.getPublicKey) {
+        return { ok: false, reason: 'GETPUBLICKEY_UNSUPPORTED(브라우저가 너무 오래됨)' };
+      }
+      const spki = cred.response.getPublicKey();
+
+      try {
+        const res = await fetch(`${WORKER_URL}/auth/webauthn/register-key`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guid, credentialId: bufToB64u(cred.rawId),
+            publicKeySpkiB64u: bufToB64u(spki),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) return { ok: false, reason: data.detail || 'SERVER_REGISTER_FAILED' };
+      } catch (e) {
+        return { ok: false, reason: '서버 등록 실패: ' + e.message };
+      }
+
+      localStorage.setItem(LS_STEPUP_CRED, bufToB64u(cred.rawId));
+      return { ok: true };
+    }
+
+    static isStepUpEnrolled() {
+      return !!localStorage.getItem(LS_STEPUP_CRED);
+    }
+
+    /** 로컬 등록만 해제한다 — 분실 기기 등으로 서버 쪽도 지워야 하면
+     *  별도 관리자 조치나 추후 revoke 엔드포인트가 필요하다(현재 없음). */
+    static disableStepUpBiometric() {
+      localStorage.removeItem(LS_STEPUP_CRED);
+      return { ok: true };
+    }
+
+    /**
+     * 2026-07-20 개정 — 고액 거래 재인증(step-up), 서버 검증판.
+     * 예전엔 _prfEval()만 로컬에서 통과하면 끝이었다(사고실험에서 발견된
+     * 치명적 결함 — 서버가 이 결과를 전혀 몰라 우회가 자명했음). 이제
+     * ①서버에 tx_hash 결박 챌린지 요청 → ②그 챌린지로 실제 WebAuthn
+     * assertion(navigator.credentials.get) → ③서버가 저장된 공개키로
+     * 직접 서명 검증 → ④통과 시 서버가 발급하는 짧은 수명 step_up_token
+     * 을 돌려받는 흐름이다. 이 토큰이 있어야 handleGdcTransfer가 문턱
+     * 이상 거래를 받아준다 — 클라이언트 판단을 서버가 신뢰하지 않는다.
+     * ★ 2026-07-20 2차 수정: LS_WEBAUTHN_CRED(PRF용) 대신 독립된
+     * LS_STEPUP_CRED를 쓰도록 변경 — 위 enrollStepUpBiometric() 참고.
+     * @param {string} guid
+     * @param {string} txHash — 방금 sign()으로 만든 거래의 tx_hash(이
+     *   거래에만 유효한 챌린지를 받기 위해 필수 — WYSIWYS 원칙)
+     * @returns {{ ok: boolean, reason?: string, step_up_token?: string }}
+     */
+    static async requireStepUpBiometric(guid, txHash) {
+      if (!GopangWallet.isStepUpEnrolled()) return { ok: false, reason: 'NOT_ENROLLED' };
+      const credIdB64u = localStorage.getItem(LS_STEPUP_CRED);
+
+      let challengeData;
+      try {
+        const res = await fetch(`${WORKER_URL}/account/step-up-challenge`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ guid, tx_hash: txHash }),
+        });
+        challengeData = await res.json();
+        if (!res.ok || !challengeData.ok) return { ok: false, reason: challengeData.detail || 'CHALLENGE_REQUEST_FAILED' };
+      } catch (e) {
+        return { ok: false, reason: '챌린지 요청 실패: ' + e.message };
+      }
+
+      let assertion;
+      try {
+        assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge: b64uToBuf(challengeData.challengeB64u),
+            rpId: challengeData.rpId || WEBAUTHN_RP_ID,
+            allowCredentials: [{ id: b64uToBuf(credIdB64u), type: 'public-key' }],
+            userVerification: 'required',
+          },
+        });
+      } catch (e) {
+        return { ok: false, reason: e.message || 'ASSERTION_FAILED' };
+      }
+
+      try {
+        const res = await fetch(`${WORKER_URL}/account/step-up-verify`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guid, sessionId: challengeData.sessionId,
+            credentialId: bufToB64u(assertion.rawId),
+            authenticatorDataB64u: bufToB64u(assertion.response.authenticatorData),
+            clientDataJSONB64u: bufToB64u(assertion.response.clientDataJSON),
+            signatureB64u: bufToB64u(assertion.response.signature),
+          }),
+        });
+        const verifyData = await res.json();
+        if (!res.ok || !verifyData.ok) return { ok: false, reason: verifyData.detail || 'SERVER_VERIFY_FAILED' };
+        return { ok: true, step_up_token: verifyData.step_up_token };
+      } catch (e) {
+        return { ok: false, reason: '서버 검증 요청 실패: ' + e.message };
+      }
     }
 
     /**
@@ -1336,6 +1604,27 @@
      */
     static async sealForRecipient(recipientPubKeyB64u, plaintext) {
       return sealForRecipient(recipientPubKeyB64u, plaintext);
+    }
+    /**
+     * 2026-07-20 신설 — 기기 간 지갑 이전(device-link) 전용.
+     * PC가 이 페어링 세션에서만 쓸 1회용 X25519 키페어를 생성한다.
+     * 공개키는 서버로 보내 폰이 sealForRecipient()로 암호화하는 데 쓰고,
+     * 개인키(CryptoKey)는 PC 메모리에만 들고 있다가 openSealedWithKey()로
+     * 복호화한 뒤 버린다 — 어디에도 저장하지 않는다(1회용, 순방향 비밀성).
+     */
+    static async generateX25519KeyPair() {
+      return generateX25519KeyPair();
+    }
+    /**
+     * 2026-07-20 신설 — 아직 지갑 인스턴스가 없는 새 기기(PC)에서,
+     * generateX25519KeyPair()로 만든 임의의 개인키로 sealForRecipient()
+     * 봉투를 복호화한다. 복호화 로직 자체는 openSealed()를 그대로
+     * 쓴다(이미 CryptoKey를 인자로 받으므로 재구현 불필요) — 지갑 인스턴스
+     * 메서드(wallet.openSealed)와 달리 this._x25519PrivKey에 묶이지 않고
+     * 호출자가 넘긴 키를 그대로 쓰는 버전만 static으로 노출한다.
+     */
+    static async openSealedWithKey(privateKey, sealed) {
+      return openSealed(privateKey, sealed);
     }
     static bufToB64u(buf)     { return bufToB64u(buf); }
     static b64uToBuf(b64u)    { return b64uToBuf(b64u); }
