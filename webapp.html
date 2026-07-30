@@ -690,6 +690,11 @@ async function sendMsg() {
         system:     sp + '\n\n[컨텍스트]\n' + contextNote,
         messages:   chatHistory,
         max_tokens: 1500,
+        // ★ 2026-07-30 — 기존 userLocation(자체 GPS 감지)을 handleAIChat의
+        // 강제 주입 체계와도 연결한다(주피터 지시 — 서비스 전반 확장).
+        // 위 contextNote의 텍스트 삽입과 별개로, 서버가 항상 같은 위치에
+        // (대화 시작 직전) 결정론적으로 붙이도록 구조화된 필드로도 보낸다.
+        currentLocation: userLocation ? `${userLocation.lat.toFixed(5)},${userLocation.lng.toFixed(5)}` : null,
       }),
     });
     const data  = await r.json();
