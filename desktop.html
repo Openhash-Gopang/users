@@ -1546,13 +1546,11 @@ function getDummy(q, filterType) {
     : (filterType ? DUMMY_DB.filter(r => r.entity_type===filterType).slice(0,5) : []);
 }
 </script>
-<script type="module" src="https://hondi.net/auth/subsystem-auth.js"
-  onerror="console.warn('[auth] subsystem-auth.js 로드 실패')"></script>
-<!-- K-서비스 공용 전화번호 인증 모듈(2026-09-06, 잠정 부착 — 주피터 지시,
-     전수 재점검으로 발견) — plan.hondi.net 등에서 이미 로그인했으면
-     .hondi.net 쿠키로 여기서도 자동 로그인된다. 기존 고팡 지갑 SSO
-     (subsystem-auth.js, 크로스 도메인 릴레이 버그로 고장난 상태)는
-     그대로 두고 공용 모듈만 부착했다. -->
+<!-- K-서비스 공용 전화번호 인증 모듈(2026-09-06 부착) — plan.hondi.net 등에서
+     이미 로그인했으면 .hondi.net 쿠키로 여기서도 자동 로그인된다.
+     2026-09-07: 기존 고팡 지갑 SSO(subsystem-auth.js, 크로스 도메인 릴레이
+     버그로 고장난 상태였음)는 전수 폐기 — 모든 K-서비스가 이 공용 모듈
+     단독 체제로 전환됨. -->
 <script>
 window.K_AUTH_CONFIG = { serviceLabel: '고팡 프로필' };
 </script>
